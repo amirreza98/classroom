@@ -11,7 +11,7 @@ import "./App.css";
 import { Toaster } from "./components/refine-ui/notification/toaster";
 import { useNotificationProvider } from "./components/refine-ui/notification/use-notification-provider";
 import { ThemeProvider } from "./components/refine-ui/theme/theme-provider";
-import { dataprovider } from "./prodivers/data";
+import { dataProvider } from "./prodivers/data";
 import Dashboard from "./pages/dashboard";
 import Subjectslist from "./pages/subjects/list";
 import SubjectsCreate from "./pages/subjects/create";
@@ -25,7 +25,7 @@ function App() {
         <ThemeProvider>
           <DevtoolsProvider>
             <Refine
-              dataProvider={dataprovider}
+              dataProvider={dataProvider}
               notificationProvider={useNotificationProvider()}
               routerProvider={routerProvider}
               options={{
