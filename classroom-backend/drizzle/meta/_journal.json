@@ -8,6 +8,13 @@
       "when": 1771518406895,
       "tag": "0000_hot_reavers",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1771861112148,
+      "tag": "0001_new_the_hunter",
+      "breakpoints": true
     }
   ]
 }
