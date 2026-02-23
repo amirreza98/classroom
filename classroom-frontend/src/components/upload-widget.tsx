@@ -3,13 +3,19 @@ import {UploadWidgetValue} from "@/types"
 import { UploadCloud } from 'lucide-react';
 import {CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET} from '@/constants'
 
-const UploadWidget = ({ value = null, onChange, disabled = false }) => {
+interface UploadWidgetProps {
+  value?: UploadWidgetValue | null;
+  onChange?: (file: UploadWidgetValue | null) => void;
+  disabled?: boolean;
+}
+
+const UploadWidget = ({ value = null, onChange, disabled = false }: UploadWidgetProps) => {
   const widgetRef = useRef<CloudinaryWidget | null>(null)
   const onChangeRef = useRef(onChange);
   
   const [preview, setPreview] = useState<UploadWidgetValue | null>(value);
   const [deleteToken, setDeleteToken] = useState<string | null> (null);
-  const [isRemoving, setIsRemoving] = useState(false);
+  // const [isRemoving, setIsRemoving] = useState(false);
 
   useEffect (() => {
     setPreview(value);
@@ -31,7 +37,7 @@ const UploadWidget = ({ value = null, onChange, disabled = false }) => {
           uploadPreset: CLOUDINARY_UPLOAD_PRESET, 
           multiple: false, 
           folder: 'uploads', 
-          maxFileSize: 5000000,
+          maxFileSize: 3000000,
           clientAllowedFormats: ['png', 'jpg', 'jpeg', 'webp']
         }, (error, result) => {
           if (!error && result.event === 'success'){
@@ -62,7 +68,7 @@ const UploadWidget = ({ value = null, onChange, disabled = false }) => {
 
   const openWidget = () => { if(!disabled) widgetRef.current?.open();}
 
-  const removeFromCloudinary = async () => {}
+  // const removeFromCloudinary = async () => {}
 
   return (
     <div className="space-y-2">
@@ -82,7 +88,7 @@ const UploadWidget = ({ value = null, onChange, disabled = false }) => {
               <UploadCloud className= "icon" />
               <div>
                 <p>Click to upload photo</p>
-                <p>PNG, JPG up to 5MBk</p>
+                <p>PNG, JPG up to 5MB</p>
               </div>
             </div>
           </div>}  

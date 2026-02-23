@@ -24,7 +24,6 @@ import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/c
 import {Textarea} from "@/components/ui/textarea.tsx";
 import {Loader2} from "lucide-react";
 import UploadWidget from "@/components/upload-widget"
-import { error } from "console";
 
 
 const Create = () => {
@@ -87,13 +86,13 @@ const Create = () => {
     const setBannerImage = (field, file) => {
         if(file){
             field.onChange(file.url);
-            form.setValue('bannerCldPubId', file.publicid, {
+            form.setValue('bannerCldPubId', file.publicId, {
                 shouldValidate: true, 
                 shouldDirty: true,
         })
         }  else {
             field.onChange('');
-            form. setValue('bannerCldPubId', '', {
+            form.setValue('bannerCldPubId', '', {
                 shouldValidate: true, 
                 shouldDirty: true,
             })
@@ -133,8 +132,8 @@ const Create = () => {
                                             <FormLabel>Banner Image <span className="text-orange-600">*</span></FormLabel>
                                             <FormControl>
                                                 <UploadWidget
-                                                    value={field.value ? { url: field.value, publicid: bannerPublicId ?? '' } : null}
-                                                    onChange={(field: any, file: any ) => setBannerImage(field, file)}
+                                                    value={field.value ? { url: field.value, publicId: bannerPublicId ?? '' } : null}
+                                                    onChange={(file) => setBannerImage(field, file)}
                                                 />
                                             </FormControl>
                                             <FormMessage />

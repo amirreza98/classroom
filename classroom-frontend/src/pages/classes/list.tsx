@@ -1,9 +1,9 @@
 import React from 'react'
 
-function list() {
+function List() {
   return (
-    <div>list</div>
+    <div>List</div>
   )
 }
 
-export default list
+export default List
