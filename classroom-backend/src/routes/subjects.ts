@@ -1,5 +1,6 @@
 import { and, desc, eq, getTableColumns, ilike, or, sql } from "drizzle-orm";
 import express from "express";
+
 import { subjects, departments } from "../db/schema/index.js";
 import { db } from "../db/index.js";
 
