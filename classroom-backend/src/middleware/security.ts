@@ -1,5 +1,7 @@
 import type {Request, Response, NextFunction} from "express";
 import aj from '../config/arcjet' 
+import { slidingWindow } from 'arcjet';  
+import { ArcjetNodeRequest } from "@arcjet/node";
 
 const securityMiddleware = async (req: Request, res: Response, next: NextFunction) => {
     if(process.env.NODE_ENV ==='test') return next();
@@ -26,7 +28,7 @@ try{
             break;
     }
 
-    const client = aj. withRule(
+    const client = aj.withRule(
         slidingWindow({
             mode: 'LIVE', 
             interval: '1m',
@@ -37,7 +39,7 @@ try{
     const arcjetRequest: ArcjetNodeRequest = {
         headers: req.headers, 
         method: req.method,
-        url: req.originalurl ?? req.url,
+        url: req.originalUrl ?? req.url,
         socket: { remoteAddress: req.socket.remoteAddress ?? req.ip ?? '0.0.0.0'},
     }
     const decision = await client. protect(arcjetRequest);
@@ -49,12 +51,13 @@ try{
         return res.status(403).json({ error: 'Forbidden', message: 'Request blocked by security policy.'});
     }
     if(decision.isDenied() && decision.reason.isRateLimit()) {
-        return res.status(403).json({ error: 'Forbidden', message});
+        return res.status(429).json({ error: 'Forbidden', message});
     }
+    return next();
 } catch (e) {
     console.error('Arcjet middleware error: ', e);
 
-    res.status(500).json({ error: 'Internal error', message: 'Something went wrong with security middleware' });
+    return res.status(500).json({ error: 'Internal error', message: 'Something went wrong with security middleware' });
     
 }
 }
