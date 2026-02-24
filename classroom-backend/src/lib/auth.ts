@@ -3,10 +3,16 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "../db"; // your drizzle instance
 import * as schema from '../db/schema/auth'
 
+const secret = process.env.BETTER_AUTH_SECRET;
+if (!secret) throw new Error("BETTER_AUTH_SECRET environment variable is required");
+
+const trustedOrigin = process.env.FRONTEND_URL;
+if (!trustedOrigin) throw new Error("FRONTEND_URL environment variable is required");
+
 export const auth = betterAuth({
     baseURL: process.env.BETTER_AUTH_URL || "http://localhost:8000",
-    secret: process.env.BETTER_AUTH_SECRET!,
-    trustedOrigins: [process.env.FRONTEND_URL!],
+    secret,
+    trustedOrigins: [trustedOrigin],
 
     database: drizzleAdapter(db, {
         provider: "pg",
@@ -18,7 +24,7 @@ export const auth = betterAuth({
     user:{
         additionalFields:{
             role: {
-                type: 'string', required: true, defaultValue: 'student', input: true,
+                type: 'string', required: true, defaultValue: 'student', input: false,
             },
             imageCldPubId: {
                 type: 'string', required: false, input: true,
