@@ -5,10 +5,12 @@ import { ArcjetNodeRequest } from "@arcjet/node";
 
 const securityMiddleware = async (req: Request, res: Response, next: NextFunction) => {
     if(process.env.NODE_ENV ==='test') return next();
+
 try{
     const role: RateLimitRole = req.user?.role ?? 'guest';
 
     let limit: number; let message: string;
+    
     switch (role) {
         case 'admin': 
             limit=20;
@@ -42,7 +44,7 @@ try{
         url: req.originalUrl ?? req.url,
         socket: { remoteAddress: req.socket.remoteAddress ?? req.ip ?? '0.0.0.0'},
     }
-    const decision = await client. protect(arcjetRequest);
+    const decision = await client.protect(arcjetRequest);
 
     if(decision.isDenied() && decision.reason.isBot()) {
         return res.status(403).json({ error: 'Forbidden', message: 'Automated requests are not allowed.'});
