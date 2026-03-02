@@ -1,5 +1,5 @@
 import AgentAPI from "apminsight";
-AgentAPI.config()
+AgentAPI.config();
 
 import express from 'express';
 import cors from "cors";
