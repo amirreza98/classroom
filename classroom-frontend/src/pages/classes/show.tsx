@@ -46,9 +46,13 @@ const Show = () => {
     <ShowView className="class-view class-show">
       <ShowViewHeader resource="classes" title="Class Details" />
       <div className= "banner">
-        {bannerUrl ? (
-          <AdvancedImage alt="Class Banner" cldImg={bannerPhoto(bannerCldPubId ?? '', name)}/>
-        ) : <div className= "placeholder" />}
+        {bannerCldPubId ? (
+          <AdvancedImage alt="Class Banner" cldImg={bannerPhoto(bannerCldPubId, name)} />
+        ) : bannerUrl ? (
+          <img src={bannerUrl} alt="Class Banner" className="w-full h-full object-cover" />
+        ) : (
+          <div className="placeholder" />
+        )}
       </div>
 
       <Card className= "details-card">
@@ -76,7 +80,7 @@ const Show = () => {
             </div>
           </div>
           <div className= "department">
-            <p>Department</ p>
+            <p>Department</p>
             <div>
               <p>{department?.name}</p>
               <p>{department?.description} </p>
@@ -89,7 +93,7 @@ const Show = () => {
         <div className="subject">
           <p>Subject</p>
           <div>
-            <Badge variant="outline">Code: {subject?.code}</ Badge>
+            <Badge variant="outline">Code: {subject?.code}</Badge>
             <p>{subject?.name}</p> 
             <p>{subject?.description}</p>
           </div>
@@ -98,7 +102,7 @@ const Show = () => {
         <Separator/>
 
         <div className="join">
-          <h2>Join Class</ h2>
+          <h2>Join Class</h2>
 
           <ol>
             <li>Ask your teacher for the invite code</li> 
