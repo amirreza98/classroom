@@ -99,7 +99,7 @@ const ClassesList = () => {
             size: 100,
             header: () => <p className="column-title">Capacity</p>,
             cell: ({ getValue }) => <span className="text-foreground">{getValue<number>()}</span>,
-        },
+        }, 
         {
             id: 'details',
             size: 140,
