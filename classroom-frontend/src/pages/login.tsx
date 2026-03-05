@@ -27,17 +27,17 @@ export default function Login() {
 
     const onSubmit = async (data: LoginForm) => {
         setError(null);
-        const result = await signIn.email({
-            email: data.email,
-            password: data.password,
-        });
-
-        if (result.error) {
-            setError(result.error.message ?? "Invalid email or password");
-            return;
+        try {
+            const result = await signIn.email(
+                { email: data.email, password: data.password },
+                { onSuccess: () => navigate("/"), onError: (ctx) => setError(ctx.error.message ?? "Invalid email or password") }
+            );
+            if (result?.error) {
+                setError(result.error.message ?? "Invalid email or password");
+            }
+        } catch (e) {
+            setError("Something went wrong. Please try again.");
         }
-
-        navigate("/");
     };
 
     return (
@@ -86,7 +86,7 @@ export default function Login() {
                                 {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
                             </div>
                         </CardContent>
-                        <CardFooter className="flex flex-col gap-3">
+                        <CardFooter className="flex flex-col gap-3 pt-2">
                             <Button type="submit" className="w-full" disabled={isSubmitting}>
                                 {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                                 Sign in

@@ -32,18 +32,17 @@ export default function Register() {
 
     const onSubmit = async (data: RegisterForm) => {
         setError(null);
-        const result = await signUp.email({
-            name: data.name,
-            email: data.email,
-            password: data.password,
-        });
-
-        if (result.error) {
-            setError(result.error.message ?? "Failed to create account");
-            return;
+        try {
+            const result = await signUp.email(
+                { name: data.name, email: data.email, password: data.password },
+                { onSuccess: () => navigate("/login"), onError: (ctx) => setError(ctx.error.message ?? "Failed to create account") }
+            );
+            if (result?.error) {
+                setError(result.error.message ?? "Failed to create account");
+            }
+        } catch (e) {
+            setError("Something went wrong. Please try again.");
         }
-
-        navigate("/");
     };
 
     return (
@@ -114,7 +113,7 @@ export default function Register() {
                                 {errors.confirmPassword && <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>}
                             </div>
                         </CardContent>
-                        <CardFooter className="flex flex-col gap-3">
+                        <CardFooter className="flex flex-col gap-3 pt-2">
                             <Button type="submit" className="w-full" disabled={isSubmitting}>
                                 {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                                 Create account
