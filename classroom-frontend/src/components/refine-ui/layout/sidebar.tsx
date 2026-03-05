@@ -15,6 +15,7 @@ import {
 import {
   Sidebar as ShadcnSidebar,
   SidebarContent as ShadcnSidebarContent,
+  SidebarFooter as ShadcnSidebarFooter,
   SidebarHeader as ShadcnSidebarHeader,
   SidebarRail as ShadcnSidebarRail,
   SidebarTrigger as ShadcnSidebarTrigger,
@@ -27,8 +28,10 @@ import {
   useRefineOptions,
   type TreeMenuItem,
 } from "@refinedev/core";
-import { ChevronRight, ListIcon } from "lucide-react";
+import { ChevronRight, ListIcon, LogOut } from "lucide-react";
 import React from "react";
+import { useSession, signOut } from "@/lib/auth-client";
+import { useNavigate } from "react-router";
 
 export function Sidebar() {
   const { open } = useShadcnSidebar();
@@ -63,6 +66,7 @@ export function Sidebar() {
           />
         ))}
       </ShadcnSidebarContent>
+      <SidebarFooter />
     </ShadcnSidebar>
   );
 }
@@ -360,6 +364,46 @@ function SidebarButton({
         buttonContent
       )}
     </Button>
+  );
+}
+
+function SidebarFooter() {
+  const { open } = useShadcnSidebar();
+  const { data: session } = useSession();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/login");
+  };
+
+  return (
+    <ShadcnSidebarFooter
+      className={cn(
+        "border-t",
+        "border-border",
+        "p-2",
+        "flex",
+        "flex-col",
+        "gap-1",
+      )}
+    >
+      {open && session?.user && (
+        <div className="px-3 py-1.5">
+          <p className="text-xs font-semibold truncate">{session.user.name}</p>
+          <p className="text-xs text-muted-foreground truncate">{session.user.email}</p>
+        </div>
+      )}
+      <Button
+        variant="ghost"
+        size="lg"
+        className="flex w-full items-center justify-start gap-2 py-2 px-3! text-sm text-muted-foreground hover:text-destructive"
+        onClick={handleLogout}
+      >
+        <LogOut className="w-4 h-4 shrink-0" />
+        {open && <span>Sign out</span>}
+      </Button>
+    </ShadcnSidebarFooter>
   );
 }
 

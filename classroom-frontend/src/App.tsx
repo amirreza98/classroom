@@ -37,6 +37,9 @@ import DepartmentsEdit from "@/pages/departments/edit";
 import DepartmentsShow from "@/pages/departments/show";
 
 import { Home, BookOpen, GraduationCap, Users, Building2 } from "lucide-react";
+import { AuthGuard } from "./components/auth-guard";
+import Login from "./pages/login";
+import Register from "./pages/register";
 
 function App() {
   return (
@@ -94,10 +97,14 @@ function App() {
               ]}
             >
               <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
                 <Route element={
-                  <Layout>
-                    <Outlet />
-                  </Layout>
+                  <AuthGuard>
+                    <Layout>
+                      <Outlet />
+                    </Layout>
+                  </AuthGuard>
                 }>
                   <Route path="/" element={<Dashboard />} />
 
