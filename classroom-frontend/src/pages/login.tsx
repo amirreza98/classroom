@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router";
+import { Link } from "react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -28,13 +28,15 @@ export default function Login() {
     const onSubmit = async (data: LoginForm) => {
         setError(null);
         try {
-            const result = await signIn.email(
-                { email: data.email, password: data.password },
-                { onSuccess: () => navigate("/"), onError: (ctx) => setError(ctx.error.message ?? "Invalid email or password") }
-            );
-            if (result?.error) {
-                setError(result.error.message ?? "Invalid email or password");
+            const { error } = await signIn.email({
+                email: data.email,
+                password: data.password,
+            });
+            if (error) {
+                setError(error.message ?? "Invalid email or password");
+                return;
             }
+            window.location.href = "/";
         } catch (e) {
             setError("Something went wrong. Please try again.");
         }

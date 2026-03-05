@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router";
+import { Link } from "react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -33,13 +33,16 @@ export default function Register() {
     const onSubmit = async (data: RegisterForm) => {
         setError(null);
         try {
-            const result = await signUp.email(
-                { name: data.name, email: data.email, password: data.password },
-                { onSuccess: () => navigate("/login"), onError: (ctx) => setError(ctx.error.message ?? "Failed to create account") }
-            );
-            if (result?.error) {
-                setError(result.error.message ?? "Failed to create account");
+            const { error } = await signUp.email({
+                name: data.name,
+                email: data.email,
+                password: data.password,
+            });
+            if (error) {
+                setError(error.message ?? "Failed to create account");
+                return;
             }
+            window.location.href = "/";
         } catch (e) {
             setError("Something went wrong. Please try again.");
         }
