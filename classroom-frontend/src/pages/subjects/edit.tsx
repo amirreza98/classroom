@@ -1,5 +1,4 @@
-import { CreateView } from "@/components/refine-ui/views/create-view";
-import { Breadcrumb } from "@/components/refine-ui/layout/breadcrumb";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useBack, useList } from "@refinedev/core";
 import { Separator } from "@/components/ui/separator";
@@ -13,42 +12,51 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
+import { ShowView, ShowViewHeader } from "@/components/refine-ui/views/show-view";
 import { Department } from "@/types";
 
-const SubjectsCreate = () => {
+const SubjectsEdit = () => {
     const back = useBack();
 
     const form = useForm<z.infer<typeof subjectSchema>>({
         resolver: zodResolver(subjectSchema),
         defaultValues: { name: "", code: "", description: "", departmentId: 0 },
+        refineCoreProps: { action: "edit", resource: "subjects" },
     });
 
-    const { refineCore: { onFinish }, handleSubmit, formState: { isSubmitting }, control } = form;
+    const { refineCore: { onFinish, queryResult }, handleSubmit, formState: { isSubmitting }, control, reset } = form;
+
+    const subjectData = queryResult?.data?.data;
 
     const { query: deptsQuery } = useList<Department>({ resource: "departments", pagination: { pageSize: 100 } });
     const departments = deptsQuery?.data?.data ?? [];
+
+    useEffect(() => {
+        if (subjectData) {
+            reset({
+                name: subjectData.name ?? "",
+                code: subjectData.code ?? "",
+                description: subjectData.description ?? "",
+                departmentId: subjectData.departmentId ?? subjectData.department?.id ?? 0,
+            });
+        }
+    }, [subjectData, reset]);
 
     const onSubmit = async (values: z.infer<typeof subjectSchema>) => {
         try {
             await onFinish(values);
         } catch (error) {
-            console.error("Error creating subject:", error);
+            console.error("Error updating subject:", error);
         }
     };
 
     return (
-        <CreateView>
-            <Breadcrumb />
-            <h1 className="page-title">Create Subject</h1>
-            <div className="intro-row">
-                <p>Add a new subject to the system.</p>
-                <Button onClick={() => back()}>Go Back</Button>
-            </div>
-            <Separator />
+        <ShowView>
+            <ShowViewHeader resource="subjects" title="Edit Subject" />
             <div className="my-4 flex items-center">
                 <Card className="w-full max-w-2xl">
                     <CardHeader>
-                        <CardTitle className="text-2xl font-bold">Subject Details</CardTitle>
+                        <CardTitle className="text-2xl font-bold">Edit Subject</CardTitle>
                     </CardHeader>
                     <Separator />
                     <CardContent className="mt-6">
@@ -89,21 +97,24 @@ const SubjectsCreate = () => {
                                 <FormField control={control} name="description" render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Description</FormLabel>
-                                        <FormControl><Textarea placeholder="Brief description of the subject..." {...field} /></FormControl>
+                                        <FormControl><Textarea placeholder="Brief description..." {...field} /></FormControl>
                                         <FormMessage />
                                     </FormItem>
                                 )} />
                                 <Separator />
-                                <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
-                                    {isSubmitting ? <><span>Creating...</span><Loader2 className="inline-block ml-2 animate-spin" /></> : "Create Subject"}
-                                </Button>
+                                <div className="flex gap-2">
+                                    <Button type="button" variant="outline" onClick={() => back()}>Cancel</Button>
+                                    <Button type="submit" size="lg" className="flex-1" disabled={isSubmitting}>
+                                        {isSubmitting ? <><span>Saving...</span><Loader2 className="inline-block ml-2 animate-spin" /></> : "Save Changes"}
+                                    </Button>
+                                </div>
                             </form>
                         </Form>
                     </CardContent>
                 </Card>
             </div>
-        </CreateView>
+        </ShowView>
     );
 };
 
-export default SubjectsCreate;
+export default SubjectsEdit;
