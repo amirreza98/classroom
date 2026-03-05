@@ -66,8 +66,8 @@ export default function Dashboard() {
         const fetchAll = async () => {
             try {
                 const [statsRes, chartsRes] = await Promise.all([
-                    fetch(`${BACKEND_BASE_URL}/dashboard/stats`, { credentials: "include" }),
-                    fetch(`${BACKEND_BASE_URL}/dashboard/charts`, { credentials: "include" }),
+                    fetch(`${BACKEND_BASE_URL}dashboard/stats`, { credentials: "include" }),
+                    fetch(`${BACKEND_BASE_URL}dashboard/charts`, { credentials: "include" }),
                 ]);
 
                 if (!statsRes.ok || !chartsRes.ok) throw new Error("Failed to fetch dashboard data");
