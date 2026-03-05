@@ -3,14 +3,16 @@ AgentAPI.config();
 
 import express from 'express';
 import cors from "cors";
-import {toNodeHandler} from "better-auth/node";
+import { toNodeHandler } from "better-auth/node";
 
 import subjectsRouter from './routes/subjects.js';
 import usersRouter from './routes/users.js';
 import classesRouter from './routes/classes.js';
+import departmentsRouter from './routes/departments.js';
+import enrollmentsRouter from './routes/enrollments.js';
+import dashboardRouter from './routes/dashboard.js';
 import securityMiddleware from './middleware/security.js';
 import { auth } from './lib/auth.js';
-
 
 const app = express();
 const PORT = 8000;
@@ -22,23 +24,25 @@ if (!FRONTEND_URL) {
 
 app.use(cors({
     origin: FRONTEND_URL,
-    methods: ['GET', 'POST', 'PUT', 'DELETE'], 
-     credentials: true
- }))
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true
+}));
 
- app.all('/api/auth/*splat', toNodeHandler(auth)); 
+app.all('/api/auth/*splat', toNodeHandler(auth));
 
 app.use(express.json());
 
 app.use(securityMiddleware);
 
-app.use('/api/subjects', subjectsRouter)
-app.use('/api/users', usersRouter)
-app.use('/api/classes', classesRouter)
+app.use('/api/subjects', subjectsRouter);
+app.use('/api/users', usersRouter);
+app.use('/api/classes', classesRouter);
+app.use('/api/departments', departmentsRouter);
+app.use('/api/enrollments', enrollmentsRouter);
+app.use('/api/dashboard', dashboardRouter);
 
-app.get('/',(req, res) => {
+app.get('/', (req, res) => {
     res.send('Hello, welcome to the Classroom');
 });
- 
-app.listen(PORT, () => { console.log(`Server is running at http://localhost:${PORT}`);
-});
+
+app.listen(PORT, () => { console.log(`Server is running at http://localhost:${PORT}`); });

@@ -3,8 +3,10 @@ export type Subject = {
     name: string;
     code: string;
     description: string;
-    department: string;
+    department?: Department;
+    departmentId?: number;
     createdAt?: string;
+    updatedAt?: string;
 };
 
 export type ListResponse<T = unknown> = {
@@ -80,7 +82,7 @@ export type User = {
     role: UserRole;
     image?: string;
     imageCldPubId?: string;
-    department?: string;
+    emailVerified?: boolean;
 };
 
 export type Schedule = {
@@ -91,25 +93,39 @@ export type Schedule = {
 
 export type Department = {
     id: number;
+    code: string;
     name: string;
-    description: string;
+    description?: string;
+    createdAt?: string;
+    updatedAt?: string;
 };
 
 export type ClassDetails = {
     id: number;
     name: string;
     description: string;
-    status: "active" | "inactive";
+    status: "active" | "inactive" | "archived";
     capacity: number;
-    courseCode: string;
-    courseName: string;
     bannerUrl?: string;
     bannerCldPubId?: string;
     subject?: Subject;
     teacher?: User;
     department?: Department;
-    schedules: Schedule[];
+    schedules?: Schedule[];
     inviteCode?: string;
+    subjectId?: number;
+    teacherId?: string;
+    createdAt?: string;
+    updatedAt?: string;
+};
+
+export type Enrollment = {
+    id: number;
+    studentId: string;
+    classId: number;
+    student?: User;
+    createdAt?: string;
+    updatedAt?: string;
 };
 
 export type SignUpPayload = {
@@ -119,4 +135,24 @@ export type SignUpPayload = {
     image?: string;
     imageCldPubId?: string;
     role: UserRole;
+};
+
+export type DashboardStats = {
+    totalUsers: number;
+    totalClasses: number;
+    totalSubjects: number;
+    totalDepartments: number;
+    totalEnrollments: number;
+    activeClasses: number;
+    totalStudents: number;
+    totalTeachers: number;
+};
+
+export type ChartDataPoint = {
+    month?: string;
+    count: number;
+    department?: string;
+    status?: string;
+    role?: string;
+    [key: string]: unknown;
 };
