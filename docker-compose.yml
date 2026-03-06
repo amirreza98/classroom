@@ -1,0 +1,14 @@
+services:
+  backend:
+    build: ./classroom-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./classroom-backend/.env
+
+  frontend:
+    build: ./classroom-frontend
+    ports:
+      - "5173:80"
+    env_file:
+      - ./classroom-frontend/.env

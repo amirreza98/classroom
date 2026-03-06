@@ -23,7 +23,7 @@ const registerSchema = z.object({
 type RegisterForm = z.infer<typeof registerSchema>;
 
 export default function Register() {
-    const navigate = useNavigate();
+
     const [error, setError] = useState<string | null>(null);
 
     const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<RegisterForm>({
