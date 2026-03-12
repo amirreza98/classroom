@@ -14,19 +14,19 @@ try{
     
     switch (role) {
         case 'admin': 
-            limit=40;
+            limit=50;
             message = 'Admin request limit exceeded (20 per minute). Slow down';
             break;
         case 'teacher':
-            limit=30;
+            limit=40;
             message = 'User request limit exceeded (10 per minute). Please wait.';
             break;
         case'student':
-            limit=20;
+            limit=30;
             message = 'User request limit exceeded (10 per minute). Please wait.';
             break;
         default:
-            limit=15;
+            limit=25;
             message = 'Guest request limit exceeded (5 per minute). Please sign up for higher limits.';
             break;
     }
