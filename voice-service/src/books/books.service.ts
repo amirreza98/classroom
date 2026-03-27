@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Book, BookDocument } from './books.schema';
 import { S3Service } from '../storage/s3.service';
+import { SegmentsService } from '../segments/segments.service';
 import { CreateBookDto } from './dto/create-book.dto';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class BooksService {
   constructor(
     @InjectModel(Book.name) private bookModel: Model<BookDocument>,
     private s3Service: S3Service,
+    private segmentsService: SegmentsService,
   ) {}
 
   async createWithFiles(
@@ -18,10 +20,8 @@ export class BooksService {
     pdfFile: Express.Multer.File,
     coverFile?: Express.Multer.File,
   ): Promise<BookDocument> {
-    // upload PDF to S3
     const pdfKey = await this.s3Service.uploadFile(pdfFile, 'pdfs');
 
-    // upload cover if provided, otherwise null
     let coverKey: string | null = null;
     if (coverFile) {
       coverKey = await this.s3Service.uploadFile(coverFile, 'covers');
@@ -36,9 +36,21 @@ export class BooksService {
       isProcessed: false,
     });
 
-    return book.save();
+    await book.save();
+
+    // process PDF into segments in the background
+    // we don't await this so the upload response is instant
+    this.segmentsService.processBook(book._id.toString(), pdfKey)
+      .then(count => {
+        console.log(`Book ${book._id} processed into ${count} segments`);
+        this.bookModel.findByIdAndUpdate(book._id, { isProcessed: true }).exec();
+      })
+      .catch(err => console.error('PDF processing failed:', err));
+
+    return book;
   }
 
+  // ... rest of the methods stay the same
   async findAllByUser(userId: string): Promise<BookDocument[]> {
     return this.bookModel.find({ userId }).sort({ createdAt: -1 });
   }
@@ -51,7 +63,6 @@ export class BooksService {
     const book = await this.bookModel.findById(id);
     if (!book) return null;
 
-    // generate presigned URLs on the fly
     const pdfUrl = await this.s3Service.getPresignedUrl(book.pdfUrl);
     const coverImageUrl = book.coverImageUrl
       ? await this.s3Service.getPresignedUrl(book.coverImageUrl)
