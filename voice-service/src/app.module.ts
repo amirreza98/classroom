@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { BooksModule } from './books/books.module';
+import { StorageModule } from './storage/storage.module';
+
 
 @Module({
   imports: [
@@ -14,6 +16,7 @@ import { BooksModule } from './books/books.module';
       inject: [ConfigService],
     }),
     BooksModule,
+    StorageModule,
   ],
 })
 export class AppModule {}
