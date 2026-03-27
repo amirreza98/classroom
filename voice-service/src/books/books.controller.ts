@@ -7,6 +7,8 @@ import {
   Body,
   UseInterceptors,
   UploadedFiles,
+  BadRequestException,
+  Headers,
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { BooksService } from './books.service';
@@ -24,7 +26,7 @@ export class BooksController {
     ]),
   )
   async uploadBook(
-    @Req() req: any,
+    @Headers('x-user-id') userId: string,
     @Body() dto: CreateBookDto,
     @UploadedFiles()
     files: {
@@ -32,7 +34,9 @@ export class BooksController {
       cover?: Express.Multer.File[];
     },
   ) {
-    const userId = req.headers['x-user-id'];
+    if (!files.pdf || files.pdf.length === 0) {
+      throw new BadRequestException('PDF file is required');
+    }
     return this.booksService.createWithFiles(
       dto,
       userId,
