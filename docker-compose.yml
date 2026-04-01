@@ -12,3 +12,10 @@ services:
       - "5173:80"
     env_file:
       - ./classroom-frontend/.env
+
+  voice-service:
+    build: ./voice-service
+    ports:
+      - "3001:3001"
+    env_file:
+      - ./voice-service/.env

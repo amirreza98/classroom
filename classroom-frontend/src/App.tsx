@@ -36,7 +36,10 @@ import DepartmentsCreate from "@/pages/departments/create";
 import DepartmentsEdit from "@/pages/departments/edit";
 import DepartmentsShow from "@/pages/departments/show";
 
-import { Home, BookOpen, GraduationCap, Users, Building2 } from "lucide-react";
+import VoiceList from "./pages/voice/list";
+import VoiceConversation from "./pages/voice/conversation";
+
+import { Home, BookOpen, GraduationCap, Users, Building2, Headphones } from "lucide-react";
 import { AuthGuard } from "./components/auth-guard";
 import Login from "./pages/login";
 import Register from "./pages/register";
@@ -94,6 +97,11 @@ function App() {
                   show: '/users/show/:id',
                   meta: { label: 'Users', icon: <Users /> }
                 },
+                {
+                  name: 'voice',
+                  list: '/voice',
+                  meta: { label: 'Voice Library', icon: <Headphones /> }
+                },
               ]}
             >
               <Routes>
@@ -134,6 +142,11 @@ function App() {
                     <Route path="create" element={<UsersCreate />} />
                     <Route path="edit/:id" element={<UsersEdit />} />
                     <Route path="show/:id" element={<UsersShow />} />
+                  </Route>
+
+                  <Route path="voice">
+                    <Route index element={<VoiceList />} />
+                    <Route path=":bookId" element={<VoiceConversation />} />
                   </Route>
                 </Route>
               </Routes>
