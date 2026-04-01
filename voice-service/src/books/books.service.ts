@@ -41,11 +41,11 @@ export class BooksService {
     // process PDF into segments in the background
     // we don't await this so the upload response is instant
     this.segmentsService.processBook(book._id.toString(), pdfKey)
-      .then(count => {
+      .then(async count => {
         console.log(`Book ${book._id} processed into ${count} segments`);
-        this.bookModel.findByIdAndUpdate(book._id, { isProcessed: true }).exec();
+        await this.bookModel.findByIdAndUpdate(book._id, { isProcessed: true }).exec();
       })
-      .catch(err => console.error('PDF processing failed:', err));
+      .catch(err => console.error(`PDF processing failed for book ${book._id}:`, err));
 
     return book;
   }

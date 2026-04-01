@@ -72,16 +72,24 @@ export class SegmentsService {
     }
 
     const chunks = this.splitIntoChunks(fullText);
-
-    await this.segmentModel.deleteMany({ bookId: new Types.ObjectId(bookId) });
-
+    
+    const bookObjectId = new Types.ObjectId(bookId);
     const segments = chunks.map((content, index) => ({
-        bookId: new Types.ObjectId(bookId),
+       bookId: bookObjectId,
         content,
         index,
     }));
 
-    await this.segmentModel.insertMany(segments);
+    const session = await this.segmentModel.db.startSession();
+    try {
+      await session.withTransaction(async () => {
+        await this.segmentModel.deleteMany({ bookId: bookObjectId }, { session });
+        await this.segmentModel.insertMany(segments, { session });
+      });
+    } finally {
+      await session.endSession();
+    }
+
 
     return chunks.length;
     }
