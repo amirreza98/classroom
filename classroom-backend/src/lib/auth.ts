@@ -1,7 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-
-import { db } from "../db/index.js"; 
+import { db } from "../db/index.js";
 import * as schema from '../db/schema/auth.js'
 
 const secret = process.env.BETTER_AUTH_SECRET;
@@ -14,7 +13,6 @@ export const auth = betterAuth({
     baseURL: process.env.BETTER_AUTH_URL || "http://localhost:8000",
     secret,
     trustedOrigins: [trustedOrigin],
-
     database: drizzleAdapter(db, {
         provider: "pg",
         schema,
@@ -22,8 +20,14 @@ export const auth = betterAuth({
     emailAndPassword: {
         enabled: true,
     },
-    user:{
-        additionalFields:{
+    socialProviders: {
+        github: {
+            clientId: process.env.GITHUB_CLIENT_ID!,
+            clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+        }
+    },
+    user: {
+        additionalFields: {
             role: {
                 type: 'string', required: true, defaultValue: 'student', input: false,
             },

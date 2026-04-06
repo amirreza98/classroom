@@ -36,6 +36,21 @@ import { useNavigate } from "react-router";
 export function Sidebar() {
   const { open } = useShadcnSidebar();
   const { menuItems, selectedKey } = useMenu();
+  const { data: session } = useSession();
+  const role = session?.user?.role as string;
+
+  // Define which routes each role can see
+  const roleRoutes: Record<string, string[]> = {
+    student: ['subjects', 'voice'],
+    teacher: ['dashboard', 'voice', 'classes', 'subjects', 'departments'],
+    admin: ['dashboard', 'voice', 'classes', 'subjects', 'departments', 'users'],
+  };
+
+  const allowedRoutes = roleRoutes[role] ?? [];
+
+  const filteredItems = menuItems.filter((item: TreeMenuItem) =>
+    allowedRoutes.includes(item.name)
+  );
 
   return (
     <ShadcnSidebar collapsible="icon" className={cn("border-none")}>
@@ -58,7 +73,7 @@ export function Sidebar() {
           }
         )}
       >
-        {menuItems.map((item: TreeMenuItem) => (
+        {filteredItems.map((item: TreeMenuItem) => (
           <SidebarItem
             key={item.key || item.name}
             item={item}
@@ -370,6 +385,8 @@ function SidebarButton({
 function SidebarFooter() {
   const { open } = useShadcnSidebar();
   const { data: session } = useSession();
+  const role = session?.user?.role;
+
   const navigate = useNavigate();
 
   const handleLogout = async () => {

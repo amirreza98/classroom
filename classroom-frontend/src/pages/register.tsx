@@ -3,12 +3,18 @@ import { Link } from "react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { signUp } from "@/lib/auth-client";
+import { signUp, signIn } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { GraduationCap, Loader2 } from "lucide-react";
+
+const GitHubIcon = () => (
+    <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
+    </svg>
+);
 
 const registerSchema = z.object({
     name: z.string().min(2, "Name must be at least 2 characters"),
@@ -23,8 +29,8 @@ const registerSchema = z.object({
 type RegisterForm = z.infer<typeof registerSchema>;
 
 export default function Register() {
-
     const [error, setError] = useState<string | null>(null);
+    const [githubLoading, setGithubLoading] = useState(false);
 
     const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<RegisterForm>({
         resolver: zodResolver(registerSchema),
@@ -46,6 +52,15 @@ export default function Register() {
         } catch (e) {
             setError("Something went wrong. Please try again.");
         }
+    };
+
+    const handleGitHubLogin = async () => {
+        setGithubLoading(true);
+        await signIn.social({
+            provider: "github",
+            callbackURL: "http://localhost:5173/",
+        });
+        setGithubLoading(false);
     };
 
     return (
@@ -73,46 +88,22 @@ export default function Register() {
                             )}
                             <div className="space-y-1.5">
                                 <Label htmlFor="name">Full name</Label>
-                                <Input
-                                    id="name"
-                                    type="text"
-                                    placeholder="John Doe"
-                                    autoComplete="name"
-                                    {...register("name")}
-                                />
+                                <Input id="name" type="text" placeholder="John Doe" autoComplete="name" {...register("name")} />
                                 {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
                             </div>
                             <div className="space-y-1.5">
                                 <Label htmlFor="email">Email</Label>
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    placeholder="you@example.com"
-                                    autoComplete="email"
-                                    {...register("email")}
-                                />
+                                <Input id="email" type="email" placeholder="you@example.com" autoComplete="email" {...register("email")} />
                                 {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
                             </div>
                             <div className="space-y-1.5">
                                 <Label htmlFor="password">Password</Label>
-                                <Input
-                                    id="password"
-                                    type="password"
-                                    placeholder="••••••••"
-                                    autoComplete="new-password"
-                                    {...register("password")}
-                                />
+                                <Input id="password" type="password" placeholder="••••••••" autoComplete="new-password" {...register("password")} />
                                 {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
                             </div>
                             <div className="space-y-1.5">
                                 <Label htmlFor="confirmPassword">Confirm password</Label>
-                                <Input
-                                    id="confirmPassword"
-                                    type="password"
-                                    placeholder="••••••••"
-                                    autoComplete="new-password"
-                                    {...register("confirmPassword")}
-                                />
+                                <Input id="confirmPassword" type="password" placeholder="••••••••" autoComplete="new-password" {...register("confirmPassword")} />
                                 {errors.confirmPassword && <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>}
                             </div>
                         </CardContent>
@@ -121,6 +112,30 @@ export default function Register() {
                                 {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                                 Create account
                             </Button>
+
+                            <div className="relative w-full">
+                                <div className="absolute inset-0 flex items-center">
+                                    <span className="w-full border-t border-border" />
+                                </div>
+                                <div className="relative flex justify-center text-xs uppercase">
+                                    <span className="bg-card px-2 text-muted-foreground">or</span>
+                                </div>
+                            </div>
+
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="w-full"
+                                onClick={handleGitHubLogin}
+                                disabled={githubLoading}
+                            >
+                                {githubLoading
+                                    ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    : <GitHubIcon />
+                                }
+                                <span className="ml-2">Continue with GitHub</span>
+                            </Button>
+
                             <p className="text-sm text-muted-foreground text-center">
                                 Already have an account?{" "}
                                 <Link to="/login" className="text-primary hover:underline font-medium">

@@ -5,13 +5,22 @@ services:
       - "8000:8000"
     env_file:
       - ./classroom-backend/.env
+    platform: linux/arm64
 
   frontend:
-    build: ./classroom-frontend
+    build:
+      context: ./classroom-frontend
+      dockerfile: Dockerfile.dev
     ports:
-      - "5173:80"
+      - "5173:5173"
     env_file:
       - ./classroom-frontend/.env
+    volumes:
+      - ./classroom-frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    platform: linux/arm64
 
   voice-service:
     build: ./voice-service
@@ -19,3 +28,4 @@ services:
       - "3001:3001"
     env_file:
       - ./voice-service/.env
+    platform: linux/arm64

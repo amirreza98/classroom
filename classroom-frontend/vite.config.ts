@@ -3,7 +3,6 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 import { defineConfig } from "vite";
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -12,9 +11,11 @@ export default defineConfig({
     },
   },
   server: {
+    host: '0.0.0.0',      // ← required for Docker
+    port: 5173,
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
+        target: "http://backend:8000",  // ← service name, not localhost
         changeOrigin: true,
       },
     },

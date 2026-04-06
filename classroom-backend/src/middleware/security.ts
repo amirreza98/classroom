@@ -14,7 +14,7 @@ try{
     
     switch (role) {
         case 'admin': 
-            limit=50;
+            limit=100;
             message = 'Admin request limit exceeded (20 per minute). Slow down';
             break;
         case 'teacher':
@@ -26,7 +26,7 @@ try{
             message = 'User request limit exceeded (10 per minute). Please wait.';
             break;
         default:
-            limit=25;
+            limit=15;
             message = 'Guest request limit exceeded (5 per minute). Please sign up for higher limits.';
             break;
     }

@@ -14,8 +14,6 @@ import { ThemeProvider } from "./components/refine-ui/theme/theme-provider";
 import { dataProvider } from "./prodivers/data";
 import { Layout } from "./components/refine-ui/layout/layout";
 
-import Dashboard from "./pages/dashboard";
-
 import SubjectsList from "./pages/subjects/list";
 import SubjectsCreate from "./pages/subjects/create";
 import SubjectsEdit from "./pages/subjects/edit";
@@ -43,6 +41,11 @@ import { Home, BookOpen, GraduationCap, Users, Building2, Headphones } from "luc
 import { AuthGuard } from "./components/auth-guard";
 import Login from "./pages/login";
 import Register from "./pages/register";
+import { lazy } from "react";
+import { RoleGuard } from "./components/role-guard";
+
+const Dashboard = lazy(() => import("./pages/dashboard"))
+
 
 function App() {
   return (
@@ -107,47 +110,53 @@ function App() {
               <Routes>
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
-                <Route element={
-                  <AuthGuard>
-                    <Layout>
-                      <Outlet />
-                    </Layout>
-                  </AuthGuard>
-                }>
-                  <Route path="/" element={<Dashboard />} />
 
-                  <Route path="departments">
-                    <Route index element={<DepartmentsList />} />
-                    <Route path="create" element={<DepartmentsCreate />} />
-                    <Route path="edit/:id" element={<DepartmentsEdit />} />
-                    <Route path="show/:id" element={<DepartmentsShow />} />
-                  </Route>
-
-                  <Route path="subjects">
-                    <Route index element={<SubjectsList />} />
-                    <Route path="create" element={<SubjectsCreate />} />
-                    <Route path="edit/:id" element={<SubjectsEdit />} />
-                    <Route path="show/:id" element={<SubjectsShow />} />
-                  </Route>
-
-                  <Route path="classes">
-                    <Route index element={<ClassesList />} />
-                    <Route path="create" element={<ClassesCreate />} />
-                    <Route path="edit/:id" element={<ClassesEdit />} />
-                    <Route path="show/:id" element={<ClassesShow />} />
-                  </Route>
-
-                  <Route path="users">
-                    <Route index element={<UsersList />} />
-                    <Route path="create" element={<UsersCreate />} />
-                    <Route path="edit/:id" element={<UsersEdit />} />
-                    <Route path="show/:id" element={<UsersShow />} />
-                  </Route>
-
+                <Route element={<AuthGuard><Layout><Outlet /></Layout></AuthGuard>}>
+                  
+                  {/* Everyone */}
                   <Route path="voice">
                     <Route index element={<VoiceList />} />
                     <Route path=":bookId" element={<VoiceConversation />} />
                   </Route>
+                  <Route path="/subjects">
+                    <Route index element={<SubjectsList />} />
+                    <Route path="show/:id" element={<SubjectsShow />} />
+                  </Route>
+
+                  {/* Teacher + Admin */}
+                  <Route element={<RoleGuard allowedRoles={['teacher', 'admin']} />}>
+                    <Route path="/" element={<Dashboard />} />
+
+                    <Route path="classes">
+                      <Route index element={<ClassesList />} />
+                      <Route path="create" element={<ClassesCreate />} />
+                      <Route path="edit/:id" element={<ClassesEdit />} />
+                      <Route path="show/:id" element={<ClassesShow />} />
+                    </Route>
+                    <Route path="subjects">
+                      <Route index element={<SubjectsList />} />
+                      <Route path="create" element={<SubjectsCreate />} />
+                      <Route path="edit/:id" element={<SubjectsEdit />} />
+                      <Route path="show/:id" element={<SubjectsShow />} />
+                    </Route>
+                    <Route path="departments">
+                      <Route index element={<DepartmentsList />} />
+                      <Route path="create" element={<DepartmentsCreate />} />
+                      <Route path="edit/:id" element={<DepartmentsEdit />} />
+                      <Route path="show/:id" element={<DepartmentsShow />} />
+                    </Route>
+                  </Route>
+
+                  {/* Admin only */}
+                  <Route element={<RoleGuard allowedRoles={['admin']} />}>
+                    <Route path="users">
+                      <Route index element={<UsersList />} />
+                      <Route path="create" element={<UsersCreate />} />
+                      <Route path="edit/:id" element={<UsersEdit />} />
+                      <Route path="show/:id" element={<UsersShow />} />
+                    </Route>
+                  </Route>
+
                 </Route>
               </Routes>
               <Toaster />
