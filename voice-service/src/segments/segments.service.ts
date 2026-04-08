@@ -38,18 +38,9 @@ export class SegmentsService {
   }
 
   private async extractTextFromPdf(buffer: Buffer): Promise<string> {
-    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
-    const pdf = await loadingTask.promise;
-
-    let fullText = '';
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      const pageText = content.items.map((item: any) => item.str).join(' ');
-      fullText += pageText + ' ';
-    }
-    return fullText;
+    const pdfParse = require('pdf-parse/lib/pdf-parse.js');
+    const data = await pdfParse(buffer);
+    return data.text;
   }
 
   private splitIntoChunks(text: string, wordsPerChunk = 500): string[] {

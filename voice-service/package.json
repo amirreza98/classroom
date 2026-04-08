@@ -36,7 +36,7 @@
     "mongoose": "^9.3.3",
     "multer": "^2.1.1",
     "openai": "^6.33.0",
-    "pdfjs-dist": "^5.5.207",
+    "pdf-parse": "^2.4.5",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.3",
