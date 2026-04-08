@@ -38,10 +38,23 @@ export class SegmentsService {
   }
 
   private async extractTextFromPdf(buffer: Buffer): Promise<string> {
-    const { PDFParse } = require('pdf-parse');
-    const parser = new PDFParse({ verbosity: 0, data: buffer });
-    const data = await parser.getText();
-    return data.text;
+    return new Promise((resolve, reject) => {
+      const PDFParser = require('pdf2json');
+      const parser = new PDFParser();
+
+      parser.on('pdfParser_dataReady', (data: any) => {
+        const text = data.Pages.map((p: any) =>
+          p.Texts.map((t: any) => {
+            try { return decodeURIComponent(t.R.map((r: any) => r.T).join('')); }
+            catch { return t.R.map((r: any) => r.T).join(''); }
+          }).join(' ')
+        ).join('\n');
+        resolve(text);
+      });
+
+      parser.on('pdfParser_dataError', (err: any) => reject(err));
+      parser.parseBuffer(buffer);
+    });
   }
 
   private splitIntoChunks(text: string, wordsPerChunk = 500): string[] {
