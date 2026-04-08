@@ -38,8 +38,9 @@ export class SegmentsService {
   }
 
   private async extractTextFromPdf(buffer: Buffer): Promise<string> {
-    const pdfParse = require('pdf-parse/lib/pdf-parse.js');
-    const data = await pdfParse(buffer);
+    const { PDFParse } = require('pdf-parse');
+    const parser = new PDFParse({ verbosity: 0, data: buffer });
+    const data = await parser.getText();
     return data.text;
   }
 
