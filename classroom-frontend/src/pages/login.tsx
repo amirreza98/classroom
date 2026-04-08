@@ -53,7 +53,7 @@ export default function Login() {
         setGithubLoading(true);
         await signIn.social({
             provider: "github",
-            callbackURL: "http://localhost:5173/",
+            callbackURL: `${window.location.origin}/`,
         });
         setGithubLoading(false);
     };
