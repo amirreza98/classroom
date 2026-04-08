@@ -10,7 +10,7 @@ const trustedOrigin = process.env.FRONTEND_URL;
 if (!trustedOrigin) throw new Error("FRONTEND_URL environment variable is required");
 
 export const auth = betterAuth({
-    baseURL: process.env.BETTER_AUTH_URL || "http://localhost:8000",
+    baseURL: process.env.BETTER_AUTH_URL,
     secret,
     trustedOrigins: [trustedOrigin],
     database: drizzleAdapter(db, {
