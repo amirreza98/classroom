@@ -51,8 +51,17 @@ export class BooksService {
   }
 
   // ... rest of the methods stay the same
-  async findAllByUser(userId: string): Promise<BookDocument[]> {
-    return this.bookModel.find({ userId }).sort({ createdAt: -1 });
+  async findAllByUser(userId: string): Promise<any[]> {
+    const books = await this.bookModel.find({ userId }).sort({ createdAt: -1 });
+    
+    return Promise.all(
+      books.map(async (book) => {
+        const coverImageUrl = book.coverImageUrl
+          ? await this.s3Service.getPresignedUrl(book.coverImageUrl)
+          : null;
+        return { ...book.toObject(), coverImageUrl };
+      })
+    );
   }
 
   async findById(id: string): Promise<BookDocument | null> {
