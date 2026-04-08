@@ -12,7 +12,7 @@ if (!trustedOrigin) throw new Error("FRONTEND_URL environment variable is requir
 export const auth = betterAuth({
     baseURL: process.env.BETTER_AUTH_URL,
     secret,
-    trustedOrigins: [trustedOrigin],
+    trustedOrigins: trustedOrigin.split(','),
     database: drizzleAdapter(db, {
         provider: "pg",
         schema,
