@@ -22,8 +22,10 @@ if (!FRONTEND_URL) {
     throw new Error('FRONTEND_URL environment variable is required');
 }
 
+const allowedOrigins = FRONTEND_URL.split(',').map(o => o.trim());
+
 app.use(cors({
-    origin: FRONTEND_URL,
+    origin: allowedOrigins,  // ✅ cors handles arrays correctly
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
 }));
