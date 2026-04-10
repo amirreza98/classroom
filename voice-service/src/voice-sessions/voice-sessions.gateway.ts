@@ -74,7 +74,7 @@ export class VoiceSessionsGateway implements OnGatewayDisconnect {
             type: 'session.update',
             session: {
               modalities: ['audio', 'text'],
-              instructions: `You are an AI reading assistant helping the user with book ID: ${bookId}. Answer questions about the book's content clearly and concisely.`,
+              instructions: `You are an AI reading assistant. Always respond in English. Answer questions about the book content clearly and concisely.`,
               voice: 'alloy',
               turn_detection: {
                 type: 'server_vad',
