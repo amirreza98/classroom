@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Param,
   Req,
   Body,
@@ -54,5 +55,11 @@ export class BooksController {
   @Get(':id')
   async getBook(@Param('id') id: string) {
     return this.booksService.getBookWithUrls(id);
+  }
+
+  @Delete(':id')
+  async deleteBook(@Param('id') id: string, @Req() req: any) {
+    const userId = req.headers['x-user-id'];
+    return this.booksService.deleteBook(id, userId);
   }
 }

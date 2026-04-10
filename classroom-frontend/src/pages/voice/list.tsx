@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { BookOpen, Plus, Loader2, Headphones } from "lucide-react";
+import { BookOpen, Plus, Loader2, Headphones, Trash2 } from "lucide-react";
 
 const VOICE_SERVICE_URL = import.meta.env.VITE_VOICE_SERVICE_URL;
 
@@ -29,6 +29,24 @@ export default function VoiceList() {
   const [form, setForm] = useState({ title: "", author: "" });
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (e: React.MouseEvent, bookId: string) => {
+    e.stopPropagation();
+    if (!session?.user) return;
+    setDeletingId(bookId);
+    try {
+      await fetch(`${VOICE_SERVICE_URL}/api/books/${bookId}`, {
+        method: "DELETE",
+        headers: { "x-user-id": session.user.id },
+      });
+      fetchBooks();
+    } catch (err) {
+      console.error("Failed to delete book", err);
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const fetchBooks = async () => {
     if (!session?.user) return;
@@ -171,9 +189,18 @@ export default function VoiceList() {
           {books.map(book => (
             <Card
               key={book._id}
-              className="cursor-pointer hover:shadow-md transition-shadow"
+              className="cursor-pointer hover:shadow-md transition-shadow relative group"
               onClick={() => navigate(`/voice/${book._id}`)}
             >
+              <button
+                onClick={(e) => handleDelete(e, book._id)}
+                disabled={deletingId === book._id}
+                className="absolute top-2 right-2 z-10 p-1.5 rounded-md bg-background/80 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+              >
+                {deletingId === book._id
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <Trash2 className="w-4 h-4" />}
+              </button>
               <CardContent className="p-4">
                 <div className="h-40 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
                   {book.coverImageUrl ? (

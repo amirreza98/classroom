@@ -1,15 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Book, BookDocument } from './books.schema';
 import { S3Service } from '../storage/s3.service';
 import { SegmentsService } from '../segments/segments.service';
 import { CreateBookDto } from './dto/create-book.dto';
+import { Segment, SegmentDocument } from '../segments/segments.schema';
 
 @Injectable()
 export class BooksService {
   constructor(
     @InjectModel(Book.name) private bookModel: Model<BookDocument>,
+    @InjectModel(Segment.name) private segmentModel: Model<SegmentDocument>,
     private s3Service: S3Service,
     private segmentsService: SegmentsService,
   ) {}
@@ -50,10 +52,9 @@ export class BooksService {
     return book;
   }
 
-  // ... rest of the methods stay the same
   async findAllByUser(userId: string): Promise<any[]> {
     const books = await this.bookModel.find({ userId }).sort({ createdAt: -1 });
-    
+
     return Promise.all(
       books.map(async (book) => {
         const coverImageUrl = book.coverImageUrl
@@ -78,5 +79,17 @@ export class BooksService {
       : null;
 
     return { ...book.toObject(), pdfUrl, coverImageUrl };
+  }
+
+  async deleteBook(bookId: string, userId: string): Promise<void> {
+    const book = await this.bookModel.findOne({ _id: bookId, userId });
+    if (!book) return;
+
+    if (book.pdfUrl) await this.s3Service.deleteFile(book.pdfUrl);
+    if (book.coverImageUrl) await this.s3Service.deleteFile(book.coverImageUrl);
+
+    await this.segmentModel.deleteMany({ bookId: new Types.ObjectId(bookId) });
+
+    await this.bookModel.findByIdAndDelete(bookId);
   }
 }
