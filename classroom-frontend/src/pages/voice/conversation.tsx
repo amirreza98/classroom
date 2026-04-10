@@ -35,7 +35,6 @@ export default function VoiceConversation() {
 
   useEffect(() => {
     return () => {
-      // cleanup on unmount
       stopRecording();
       socketRef.current?.disconnect();
     };
@@ -43,30 +42,33 @@ export default function VoiceConversation() {
 
   const connectToVoiceService = async () => {
     if (!session?.user || !bookId) return;
+    if (socketRef.current?.connected) return; // prevent reconnection
+
 
     setStatus("Connecting...");
 
-    const socket = io(VOICE_SERVICE_URL, {
-      transports: ["websocket"],
+    const socket = io(`${VOICE_SERVICE_URL}/voice`, {
+      transports: ["polling", "websocket"],
     });
 
     socketRef.current = socket;
 
     socket.on("connect", () => {
+      console.log("Socket connected:", socket.id);
       socket.emit("start-session", {
         bookId,
         userId: session.user.id,
       });
     });
 
-    socket.on("session-started", (data: { sessionId: string }) => {
+    socket.on("session-ready", (data: { sessionId: string }) => {
+      console.log("Session ready:", data);
       setSessionId(data.sessionId);
       setConnected(true);
-      setStatus("Connected — speak to ask about the book");
+      setStatus("Connected — tap mic to speak");
     });
 
     socket.on("openai-event", (event: any) => {
-      // handle transcript from user
       if (
         event.type === "conversation.item.created" &&
         event.item?.role === "user" &&
@@ -78,7 +80,6 @@ export default function VoiceConversation() {
         ]);
       }
 
-      // handle assistant text response
       if (event.type === "response.audio_transcript.done") {
         setMessages(prev => [
           ...prev,
@@ -86,7 +87,6 @@ export default function VoiceConversation() {
         ]);
       }
 
-      // play audio response
       if (event.type === "response.audio.delta" && event.delta) {
         playAudioChunk(event.delta);
       }
@@ -95,6 +95,16 @@ export default function VoiceConversation() {
     socket.on("session-ended", () => {
       setConnected(false);
       setStatus("Session ended");
+    });
+
+    socket.on("connect_error", (err) => {
+      console.error("Connect error:", err.message);
+      setStatus(`Connection error: ${err.message}`);
+    });
+
+    socket.on("disconnect", (reason) => {
+      console.log("Socket disconnected:", reason);
+      setConnected(false);
     });
 
     socket.on("error", (err: { message: string }) => {
@@ -115,7 +125,6 @@ export default function VoiceConversation() {
         bytes[i] = binary.charCodeAt(i);
       }
 
-      // convert PCM16 to float32
       const pcm = new Int16Array(bytes.buffer);
       const float32 = new Float32Array(pcm.length);
       for (let i = 0; i < pcm.length; i++) {
@@ -140,20 +149,35 @@ export default function VoiceConversation() {
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: 24000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+        }
+      });
 
-      mediaRecorder.ondataavailable = async (e) => {
-        if (e.data.size === 0) return;
-        const buffer = await e.data.arrayBuffer();
-        const base64 = btoa(
-          String.fromCharCode(...new Uint8Array(buffer))
-        );
+      const audioContext = new AudioContext({ sampleRate: 24000 });
+      audioContextRef.current = audioContext;
+      const source = audioContext.createMediaStreamSource(stream);
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+      processor.onaudioprocess = (e) => {
+        const float32 = e.inputBuffer.getChannelData(0);
+        const pcm16 = new Int16Array(float32.length);
+        for (let i = 0; i < float32.length; i++) {
+          pcm16[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768));
+        }
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(pcm16.buffer)));
+        console.log("Sending audio chunk, length:", base64.length); // add this
         socketRef.current?.emit("send-audio", { audio: base64 });
       };
 
-      mediaRecorder.start(100); // send chunks every 100ms
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+
+      mediaRecorderRef.current = { stream, processor, source } as any;
       setRecording(true);
       setStatus("Listening...");
     } catch (e) {
@@ -162,9 +186,11 @@ export default function VoiceConversation() {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+    const recorder = mediaRecorderRef.current as any;
+    if (recorder) {
+      recorder.processor?.disconnect();
+      recorder.source?.disconnect();
+      recorder.stream?.getTracks().forEach((t: any) => t.stop());
       mediaRecorderRef.current = null;
     }
     if (recording) {
@@ -194,7 +220,6 @@ export default function VoiceConversation() {
         </div>
       </div>
 
-      {/* transcript */}
       <Card className="flex-1 overflow-hidden">
         <CardContent className="h-full overflow-y-auto p-4 flex flex-col gap-3">
           {messages.length === 0 ? (
@@ -223,7 +248,6 @@ export default function VoiceConversation() {
         </CardContent>
       </Card>
 
-      {/* mic button */}
       <div className="flex flex-col items-center gap-3">
         <Button
           size="lg"

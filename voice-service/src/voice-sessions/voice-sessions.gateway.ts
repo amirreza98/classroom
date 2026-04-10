@@ -68,7 +68,7 @@ export class VoiceSessionsGateway implements OnGatewayDisconnect {
         clientOpenAIMap.set(client.id, openAIws);
 
         openAIws.on('open', () => {
-          console.log('OpenAI WebSocket opened');
+          console.log('[Gateway] OpenAI WebSocket opened for client:', client.id);
 
           openAIws.send(JSON.stringify({
             type: 'session.update',
@@ -85,30 +85,23 @@ export class VoiceSessionsGateway implements OnGatewayDisconnect {
             },
           }));
 
+          console.log('[Gateway] Emitting session-started to client:', client.id);
           client.emit('session-ready', { sessionId: session._id });
         });
 
         openAIws.on('message', (raw) => {
-          const event = JSON.parse(raw.toString()) as { type: string; delta?: string; error?: { message: string } };
+          const event = JSON.parse(raw.toString()) as { type: string; error?: { message: string } };
+          console.log('[Gateway] OpenAI event:', event.type);
 
-          switch (event.type) {
-            case 'response.audio.delta':
-              client.emit('audio-delta', { delta: event.delta });
-              break;
-            case 'response.audio.done':
-              client.emit('audio-done', {});
-              break;
-            case 'response.audio_transcript.delta':
-              client.emit('transcript-delta', { delta: event.delta });
-              break;
-            case 'response.done':
-              client.emit('response-done', {});
-              break;
-            case 'error':
-              console.error('OpenAI realtime error:', event.error);
-              client.emit('error', { message: event.error?.message });
-              break;
+          if (event.type === 'error') {
+            console.error('[Gateway] OpenAI realtime error:', event.error);
+            client.emit('error', { message: event.error?.message });
+            return;
           }
+
+          // forward all events to frontend as openai-event so the client
+          // can handle them with the original OpenAI event structure
+          client.emit('openai-event', event);
         });
 
         openAIws.on('error', (err) => {
@@ -134,6 +127,7 @@ export class VoiceSessionsGateway implements OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { audio: string }, // base64 encoded PCM16
   ) {
+    console.log('Audio chunk received, length:', data.audio?.length);
     const openAIws = clientOpenAIMap.get(client.id);
     if (!openAIws || openAIws.readyState !== WebSocket.OPEN) return;
 
