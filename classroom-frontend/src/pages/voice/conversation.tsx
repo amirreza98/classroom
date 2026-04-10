@@ -113,6 +113,30 @@ export default function VoiceConversation() {
     });
   };
 
+  const audioQueueRef = useRef<Float32Array[]>([]);
+  const isPlayingRef = useRef(false);
+
+  const playAudioQueue = async (ctx: AudioContext) => {
+    if (isPlayingRef.current || audioQueueRef.current.length === 0) return;
+    isPlayingRef.current = true;
+
+    while (audioQueueRef.current.length > 0) {
+      const float32 = audioQueueRef.current.shift()!;
+      const buffer = ctx.createBuffer(1, float32.length, 24000);
+      buffer.copyToChannel(float32, 0);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      
+      await new Promise<void>(resolve => {
+        source.onended = () => resolve();
+        source.start();
+      });
+    }
+    
+    isPlayingRef.current = false;
+  };
+
   const playAudioChunk = async (base64Audio: string) => {
     try {
       if (!audioContextRef.current) {
@@ -131,12 +155,8 @@ export default function VoiceConversation() {
         float32[i] = pcm[i] / 32768;
       }
 
-      const buffer = ctx.createBuffer(1, float32.length, 24000);
-      buffer.copyToChannel(float32, 0);
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(ctx.destination);
-      source.start();
+      audioQueueRef.current.push(float32);
+      playAudioQueue(ctx);
     } catch (e) {
       console.error("Audio playback error", e);
     }

@@ -93,4 +93,11 @@ export class SegmentsService {
       .limit(3)
       .sort({ score: { $meta: 'textScore' } });
   }
+  
+  async getFirstSegments(bookId: string, limit = 3): Promise<SegmentDocument[]> {
+    return this.segmentModel
+      .find({ bookId: new Types.ObjectId(bookId) })
+      .sort({ index: 1 })
+      .limit(limit);
+  }
 }

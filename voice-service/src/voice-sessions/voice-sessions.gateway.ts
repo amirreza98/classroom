@@ -67,14 +67,20 @@ export class VoiceSessionsGateway implements OnGatewayDisconnect {
 
         clientOpenAIMap.set(client.id, openAIws);
 
-        openAIws.on('open', () => {
-          console.log('[Gateway] OpenAI WebSocket opened for client:', client.id);
-
+        openAIws.on('open', async () => {
+          // fetch some segments to give context
+          const segments = await this.voiceSessionsService.getBookContext(bookId);
+          
           openAIws.send(JSON.stringify({
             type: 'session.update',
             session: {
               modalities: ['audio', 'text'],
-              instructions: `You are an AI reading assistant. Always respond in English. Answer questions about the book content clearly and concisely.`,
+              instructions: `You are an AI reading assistant. Always respond in English. 
+              You are helping the user with a book. Here is some content from the book:
+              
+              ${segments}
+              
+              Answer questions based on this content. Be conversational and concise.`,
               voice: 'alloy',
               turn_detection: {
                 type: 'server_vad',
@@ -85,7 +91,6 @@ export class VoiceSessionsGateway implements OnGatewayDisconnect {
             },
           }));
 
-          console.log('[Gateway] Emitting session-started to client:', client.id);
           client.emit('session-ready', { sessionId: session._id });
         });
 

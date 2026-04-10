@@ -34,4 +34,10 @@ export class VoiceSessionsService {
     if (!segments.length) return 'No relevant content found.';
     return segments.map(s => s.content).join('\n\n');
   }
+
+  async getBookContext(bookId: string): Promise<string> {
+    const segments = await this.segmentsService.getFirstSegments(bookId, 3);
+    if (!segments.length) return 'No content available.';
+    return segments.map(s => s.content).join('\n\n');
+  }
 }
