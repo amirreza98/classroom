@@ -6,6 +6,7 @@ services:
     env_file:
       - ./classroom-backend/.env
     platform: linux/arm64
+    image: classroom-backend:latest
 
   frontend:
     build:
@@ -21,6 +22,7 @@ services:
     depends_on:
       - backend
     platform: linux/arm64
+    image: classroom-frontend:latest
 
   voice-service:
     build: ./voice-service
@@ -29,3 +31,4 @@ services:
     env_file:
       - ./voice-service/.env
     platform: linux/arm64
+    image: classroom-voice:latest
