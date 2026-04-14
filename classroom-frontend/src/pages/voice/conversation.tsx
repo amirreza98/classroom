@@ -17,7 +17,7 @@ type Message = {
   role: "user" | "assistant";
   text: string;
   ts: Date;
-  pending?: boolean; // user message waiting for transcription
+  pending?: boolean;
 };
 
 const STATE_LABEL: Record<CallState, string> = {
@@ -29,7 +29,7 @@ const STATE_LABEL: Record<CallState, string> = {
   speaking:    "Speaking…",
 };
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────
 function formatDuration(s: number) {
   const m = Math.floor(s / 60).toString().padStart(2, "0");
   const sec = (s % 60).toString().padStart(2, "0");
@@ -40,7 +40,7 @@ function uid() {
   return Math.random().toString(36).slice(2);
 }
 
-// ── Waveform bars: CSS-animated for AI speaking ───────────────────────────
+// ── Waveform bars ────────────────────────────────────────────────────────
 function AiWaveform({ active }: { active: boolean }) {
   const bars = [0.4, 0.7, 1, 0.85, 0.6, 0.9, 0.5];
   return (
@@ -72,7 +72,6 @@ function AiWaveform({ active }: { active: boolean }) {
   );
 }
 
-// ── Mic level bars: driven by AnalyserNode data ───────────────────────────
 function MicWaveform({ levels }: { levels: number[] }) {
   return (
     <div className="flex items-end justify-center gap-0.5 h-10">
@@ -87,7 +86,7 @@ function MicWaveform({ levels }: { levels: number[] }) {
   );
 }
 
-// ── Central AI orb ────────────────────────────────────────────────────────
+// ── Central AI orb ───────────────────────────────────────────────────────
 function AiOrb({ state }: { state: CallState }) {
   const isSpeaking   = state === "speaking";
   const isListening  = state === "listening";
@@ -95,38 +94,27 @@ function AiOrb({ state }: { state: CallState }) {
 
   return (
     <div className="relative flex items-center justify-center w-48 h-48">
-      {/* Outer ring – slow pulse */}
-      <div
-        className={cn(
-          "absolute inset-0 rounded-full transition-all duration-700",
-          isSpeaking  && "bg-blue-500/10 animate-ping",
-          isListening && "bg-red-500/10 animate-ping",
-        )}
-      />
-      {/* Mid ring */}
-      <div
-        className={cn(
-          "absolute w-36 h-36 rounded-full transition-all duration-500",
-          isSpeaking  && "bg-blue-500/15 animate-pulse",
-          isListening && "bg-red-500/15 animate-pulse",
-          isProcessing && "bg-amber-500/10 animate-pulse",
-        )}
-      />
-      {/* Core orb */}
-      <div
-        className={cn(
-          "relative w-24 h-24 rounded-full flex items-center justify-center transition-all duration-500",
-          isSpeaking  && "bg-blue-600  shadow-[0_0_48px_rgba(59,130,246,0.55)]",
-          isListening && "bg-red-600   shadow-[0_0_48px_rgba(220,38,38,0.55)]",
-          isProcessing && "bg-amber-600 shadow-[0_0_48px_rgba(217,119,6,0.45)]",
-          !isSpeaking && !isListening && !isProcessing && "bg-slate-700 shadow-[0_0_24px_rgba(0,0,0,0.4)]",
-        )}
-      >
-        {/* Spinning border while processing */}
+      <div className={cn(
+        "absolute inset-0 rounded-full transition-all duration-700",
+        isSpeaking  && "bg-blue-500/10 animate-ping",
+        isListening && "bg-red-500/10 animate-ping",
+      )} />
+      <div className={cn(
+        "absolute w-36 h-36 rounded-full transition-all duration-500",
+        isSpeaking   && "bg-blue-500/15 animate-pulse",
+        isListening  && "bg-red-500/15 animate-pulse",
+        isProcessing && "bg-amber-500/10 animate-pulse",
+      )} />
+      <div className={cn(
+        "relative w-24 h-24 rounded-full flex items-center justify-center transition-all duration-500",
+        isSpeaking   && "bg-blue-600  shadow-[0_0_48px_rgba(59,130,246,0.55)]",
+        isListening  && "bg-red-600   shadow-[0_0_48px_rgba(220,38,38,0.55)]",
+        isProcessing && "bg-amber-600 shadow-[0_0_48px_rgba(217,119,6,0.45)]",
+        !isSpeaking && !isListening && !isProcessing && "bg-slate-700 shadow-[0_0_24px_rgba(0,0,0,0.4)]",
+      )}>
         {isProcessing && (
           <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-amber-400 animate-spin" />
         )}
-        {/* Icon */}
         <svg viewBox="0 0 24 24" className="w-11 h-11 text-white" fill="currentColor">
           <path d="M12 2a5 5 0 0 1 5 5v4a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5Zm-7 9a1 1 0 0 1 2 0 5 5 0 0 0 10 0 1 1 0 1 1 2 0 7 7 0 0 1-6 6.92V19h2a1 1 0 1 1 0 2H9a1 1 0 1 1 0-2h2v-1.08A7 7 0 0 1 5 11Z" />
         </svg>
@@ -135,7 +123,7 @@ function AiOrb({ state }: { state: CallState }) {
   );
 }
 
-// ── Typing dots (pending user message) ───────────────────────────────────
+// ── Typing dots ──────────────────────────────────────────────────────────
 function TypingDots() {
   return (
     <>
@@ -158,30 +146,25 @@ function TypingDots() {
   );
 }
 
-// ── Message bubble ────────────────────────────────────────────────────────
+// ── Message bubble ───────────────────────────────────────────────────────
 function MessageBubble({ msg }: { msg: Message }) {
   const isUser = msg.role === "user";
   return (
     <div className={cn("flex gap-2.5 px-4", isUser ? "flex-row-reverse" : "flex-row")}>
-      {/* Avatar dot */}
-      <div
-        className={cn(
-          "flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold mt-0.5",
-          isUser ? "bg-slate-600 text-slate-200" : "bg-blue-600 text-white",
-        )}
-      >
+      <div className={cn(
+        "flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold mt-0.5",
+        isUser ? "bg-slate-600 text-slate-200" : "bg-blue-600 text-white",
+      )}>
         {isUser ? "U" : "AI"}
       </div>
       <div className="flex flex-col gap-0.5 max-w-[78%]">
-        <div
-          className={cn(
-            "rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed",
-            isUser
-              ? "bg-slate-700 text-slate-100 rounded-tr-sm"
-              : "bg-slate-800 border border-slate-700 text-slate-100 rounded-tl-sm",
-          )}
-        >
-          {msg.pending ? <TypingDots /> : msg.text}
+        <div className={cn(
+          "rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed",
+          isUser
+            ? "bg-slate-700 text-slate-100 rounded-tr-sm"
+            : "bg-slate-800 border border-slate-700 text-slate-100 rounded-tl-sm",
+        )}>
+          {msg.pending && msg.text === "" ? <TypingDots /> : msg.text}
         </div>
         <span className={cn("text-[10px] text-slate-500", isUser ? "text-right" : "text-left")}>
           {msg.ts.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -191,23 +174,38 @@ function MessageBubble({ msg }: { msg: Message }) {
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────
+// ── Main component ───────────────────────────────────────────────────────
 export default function VoiceConversation() {
   const { bookId } = useParams();
   const navigate = useNavigate();
   const { data: session } = useSession();
 
-  // ── State ─────────────────────────────────────────────────────────────
-  const [callState, setCallState] = useState<CallState>("idle");
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [duration, setDuration] = useState(0);
-  const [micLevels, setMicLevels] = useState<number[]>(Array(18).fill(0));
+  const [callState, setCallState]           = useState<CallState>("idle");
+  const [sessionId, setSessionId]           = useState<string | null>(null);
+  const [messages, setMessages]             = useState<Message[]>([]);
+  const [duration, setDuration]             = useState(0);
+  const [micLevels, setMicLevels]           = useState<number[]>(Array(18).fill(0));
   const [transcriptOpen, setTranscriptOpen] = useState(true);
 
-  // ── Refs ──────────────────────────────────────────────────────────────
-  const socketRef        = useRef<Socket | null>(null);
-  const micRef           = useRef<{
+  const socketRef           = useRef<Socket | null>(null);
+  const playCtxRef          = useRef<AudioContext | null>(null);
+  const activeSourceRef     = useRef<AudioBufferSourceNode | null>(null);
+  const audioQueueRef       = useRef<Float32Array[]>([]);
+  const isPlayingRef        = useRef(false);
+  const durationRef         = useRef<ReturnType<typeof setInterval> | null>(null);
+  const messagesEndRef      = useRef<HTMLDivElement>(null);
+  const callStateRef        = useRef<CallState>("idle");
+  const pendingUserMsgIdRef = useRef<string | null>(null);
+  // Streaming assistant message id
+  const streamingAiMsgIdRef = useRef<string | null>(null);
+
+  // ── FIX 1: separate active flag from node refs ────────────────────────
+  // The old code stored animFrame inside micRef and nulled micRef in cleanupMic,
+  // but the RAF tick() still ran one more frame after that, crashing on
+  // micRef.current.animFrame = ... where micRef.current was already null.
+  // Solution: a boolean flag that tick() checks BEFORE touching anything.
+  const micActiveRef = useRef(false);
+  const micNodeRefs  = useRef<{
     stream: MediaStream;
     processor: ScriptProcessorNode;
     source: MediaStreamAudioSourceNode;
@@ -216,24 +214,13 @@ export default function VoiceConversation() {
     animFrame: number;
     ctx: AudioContext;
   } | null>(null);
-  const playCtxRef       = useRef<AudioContext | null>(null);
-  const activeSourceRef  = useRef<AudioBufferSourceNode | null>(null);
-  const audioQueueRef    = useRef<Float32Array[]>([]);
-  const isPlayingRef     = useRef(false);
-  const durationRef          = useRef<ReturnType<typeof setInterval> | null>(null);
-  const messagesEndRef       = useRef<HTMLDivElement>(null);
-  const callStateRef         = useRef<CallState>("idle");
-  const pendingUserMsgIdRef  = useRef<string | null>(null);
 
-  // keep ref in sync so audio callbacks can read latest state
   useEffect(() => { callStateRef.current = callState; }, [callState]);
 
-  // Auto-scroll transcript
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Duration timer
   useEffect(() => {
     if (callState !== "idle" && callState !== "connecting") {
       durationRef.current = setInterval(() => setDuration(d => d + 1), 1000);
@@ -244,7 +231,6 @@ export default function VoiceConversation() {
     return () => { if (durationRef.current) clearInterval(durationRef.current); };
   }, [callState]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       cleanupMic();
@@ -253,17 +239,19 @@ export default function VoiceConversation() {
     };
   }, []);
 
-  // ── Mic cleanup ───────────────────────────────────────────────────────
+  // ── Mic cleanup — flag first, then tear down ──────────────────────────
   const cleanupMic = useCallback(() => {
-    if (micRef.current) {
-      cancelAnimationFrame(micRef.current.animFrame);
-      micRef.current.processor.disconnect();
-      micRef.current.source.disconnect();
-      micRef.current.analyser.disconnect();
-      micRef.current.silentGain.disconnect();
-      micRef.current.stream.getTracks().forEach(t => t.stop());
-      micRef.current.ctx.close().catch(() => {});
-      micRef.current = null;
+    micActiveRef.current = false; // tick() will bail on next frame
+    if (micNodeRefs.current) {
+      const { animFrame, processor, source, analyser, silentGain, stream, ctx } = micNodeRefs.current;
+      cancelAnimationFrame(animFrame);
+      processor.disconnect();
+      source.disconnect();
+      analyser.disconnect();
+      silentGain.disconnect();
+      stream.getTracks().forEach(t => t.stop());
+      ctx.close().catch(() => {});
+      micNodeRefs.current = null;
     }
     setMicLevels(Array(18).fill(0));
   }, []);
@@ -291,8 +279,8 @@ export default function VoiceConversation() {
     }
 
     isPlayingRef.current = false;
-    // Only move back to ready if we haven't already switched to listening
-    setCallState(prev => prev === "speaking" ? "ready" : prev);
+    // Always unconditionally reset — old conditional guard caused lockout
+    setCallState("ready");
   }, []);
 
   const playAudioChunk = useCallback(async (base64Audio: string) => {
@@ -305,8 +293,8 @@ export default function VoiceConversation() {
       const bytes  = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-      const pcm    = new Int16Array(bytes.buffer);
-      const f32    = new Float32Array(pcm.length);
+      const pcm = new Int16Array(bytes.buffer);
+      const f32 = new Float32Array(pcm.length);
       for (let i = 0; i < pcm.length; i++) f32[i] = pcm[i] / 32768;
 
       audioQueueRef.current.push(f32);
@@ -336,32 +324,96 @@ export default function VoiceConversation() {
     });
 
     socket.on("openai-event", (event: any) => {
-      // User speech transcript — resolve the pending placeholder bubble
+
+      // ── User transcript via Whisper ───────────────────────────────
+      // Requires backend session.update: { input_audio_transcription: { model: "whisper-1" } }
       if (event.type === "conversation.item.input_audio_transcription.completed") {
         const transcript = event.transcript?.trim();
-        if (transcript) {
-          if (pendingUserMsgIdRef.current) {
-            // Update the placeholder with the real text
-            setMessages(prev =>
-              prev.map(m =>
-                m.id === pendingUserMsgIdRef.current
-                  ? { ...m, text: transcript, pending: false }
-                  : m
-              )
-            );
-            pendingUserMsgIdRef.current = null;
-          } else {
-            setMessages(prev => [...prev, { id: uid(), role: "user", text: transcript, ts: new Date() }]);
-          }
+        if (transcript && pendingUserMsgIdRef.current) {
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === pendingUserMsgIdRef.current
+                ? { ...m, text: transcript, pending: false }
+                : m
+            )
+          );
+          pendingUserMsgIdRef.current = null;
         }
       }
-      // AI response transcript
-      if (event.type === "response.audio_transcript.done") {
-        setMessages(prev => [...prev, { id: uid(), role: "assistant", text: event.transcript, ts: new Date() }]);
+
+      // ── FIX 2: AI transcript streaming (real-time feel) ───────────
+      // response.audio_transcript.delta fires with partial text chunks
+      // as the AI generates its response — we build up the bubble live
+      if (event.type === "response.audio_transcript.delta" && event.delta) {
+        setMessages(prev => {
+          // If there's already a streaming AI bubble, append to it
+          if (streamingAiMsgIdRef.current) {
+            return prev.map(m =>
+              m.id === streamingAiMsgIdRef.current
+                ? { ...m, text: m.text + event.delta }
+                : m
+            );
+          }
+          // Otherwise create a new streaming bubble
+          const newId = uid();
+          streamingAiMsgIdRef.current = newId;
+          return [...prev, { id: newId, role: "assistant", text: event.delta, ts: new Date(), pending: true }];
+        });
       }
-      // AI audio chunks
+
+      // ── AI transcript complete — finalize the streaming bubble ────
+      if (event.type === "response.audio_transcript.done") {
+        if (streamingAiMsgIdRef.current) {
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === streamingAiMsgIdRef.current
+                ? { ...m, text: event.transcript, pending: false }
+                : m
+            )
+          );
+          streamingAiMsgIdRef.current = null;
+        } else {
+          // Fallback if delta events didn't fire
+          setMessages(prev => [...prev, { id: uid(), role: "assistant", text: event.transcript, ts: new Date() }]);
+        }
+        setTimeout(() => {
+          setCallState(prev => prev === "processing" ? "ready" : prev);
+        }, 300);
+      }
+
+      // ── AI audio chunks ───────────────────────────────────────────
       if (event.type === "response.audio.delta" && event.delta) {
         playAudioChunk(event.delta);
+      }
+
+      // ── FIX 3: response.done — ultimate safety net ────────────────
+      // If Whisper isn't enabled on the backend, user bubble stays as
+      // dots forever. We resolve it here with a fallback label.
+      if (event.type === "response.done") {
+        if (pendingUserMsgIdRef.current) {
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === pendingUserMsgIdRef.current
+                ? { ...m, text: "🎤 (audio message)", pending: false }
+                : m
+            )
+          );
+          pendingUserMsgIdRef.current = null;
+        }
+        // Finalize any still-streaming AI bubble
+        if (streamingAiMsgIdRef.current) {
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === streamingAiMsgIdRef.current ? { ...m, pending: false } : m
+            )
+          );
+          streamingAiMsgIdRef.current = null;
+        }
+        setTimeout(() => {
+          setCallState(prev =>
+            prev === "processing" || prev === "speaking" ? "ready" : prev
+          );
+        }, 500);
       }
     });
 
@@ -371,7 +423,6 @@ export default function VoiceConversation() {
   }, [session, bookId, playAudioChunk]);
 
   const endSession = useCallback(() => {
-    // Stop all in-flight audio immediately
     if (activeSourceRef.current) {
       try { activeSourceRef.current.stop(); } catch {}
       activeSourceRef.current = null;
@@ -382,12 +433,13 @@ export default function VoiceConversation() {
       playCtxRef.current.close().catch(() => {});
       playCtxRef.current = null;
     }
-
     if (sessionId) socketRef.current?.emit("end-session", { sessionId });
     cleanupMic();
     socketRef.current?.disconnect();
     setCallState("idle");
     setMessages([]);
+    streamingAiMsgIdRef.current = null;
+    pendingUserMsgIdRef.current = null;
     navigate("/voice");
   }, [sessionId, cleanupMic, navigate]);
 
@@ -396,7 +448,6 @@ export default function VoiceConversation() {
     const state = callStateRef.current;
 
     if (state === "ready") {
-      // ── Unmute — only allowed once AI has finished speaking ────────
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: { sampleRate: 24000, channelCount: 1, echoCancellation: true, noiseSuppression: true },
@@ -410,6 +461,7 @@ export default function VoiceConversation() {
         const processor = ctx.createScriptProcessor(4096, 1, 1);
 
         processor.onaudioprocess = e => {
+          if (!micActiveRef.current) return; // guard against post-cleanup firings
           const float32 = e.inputBuffer.getChannelData(0);
           const pcm16   = new Int16Array(float32.length);
           for (let i = 0; i < float32.length; i++) {
@@ -419,9 +471,6 @@ export default function VoiceConversation() {
           socketRef.current?.emit("send-audio", { audio: base64 });
         };
 
-        // Route mic through a zero-gain node so onaudioprocess fires
-        // but mic audio is never leaked to the speaker (which would boost
-        // perceived volume and cause echo).
         const silentGain = ctx.createGain();
         silentGain.gain.value = 0;
 
@@ -430,29 +479,33 @@ export default function VoiceConversation() {
         processor.connect(silentGain);
         silentGain.connect(ctx.destination);
 
-        // Animation loop for mic level visualizer
-        const data = new Uint8Array(analyser.frequencyBinCount);
+        const freqData = new Uint8Array(analyser.frequencyBinCount);
+
+        // ── FIX 1 cont: tick checks micActiveRef before writing to refs ──
         const tick = () => {
-          analyser.getByteFrequencyData(data);
+          if (!micActiveRef.current) return; // bail — nodes may be gone
+          analyser.getByteFrequencyData(freqData);
           const levels = Array.from({ length: 18 }, (_, i) => {
-            const idx = Math.floor((i / 18) * data.length);
-            return data[idx] / 255;
+            const idx = Math.floor((i / 18) * freqData.length);
+            return freqData[idx] / 255;
           });
           setMicLevels(levels);
-          micRef.current!.animFrame = requestAnimationFrame(tick);
+          const nextFrame = requestAnimationFrame(tick);
+          // Safe to write: micActiveRef is true so micNodeRefs.current exists
+          if (micNodeRefs.current) micNodeRefs.current.animFrame = nextFrame;
         };
-        const animFrame = requestAnimationFrame(tick);
 
-        micRef.current = { stream, processor, source, analyser, silentGain, animFrame, ctx };
+        const animFrame = requestAnimationFrame(tick);
+        micNodeRefs.current = { stream, processor, source, analyser, silentGain, animFrame, ctx };
+        micActiveRef.current = true; // set AFTER nodes are populated
+
         setCallState("listening");
       } catch {
         setCallState("ready");
       }
     } else if (state === "listening") {
-      // ── Mute / commit — add placeholder, then trigger AI response ──
-      cleanupMic();
+      cleanupMic(); // sets micActiveRef.current = false first
 
-      // Show a pending bubble immediately so the user sees their turn
       const msgId = uid();
       pendingUserMsgIdRef.current = msgId;
       setMessages(prev => [...prev, { id: msgId, role: "user", text: "", ts: new Date(), pending: true }]);
@@ -462,16 +515,14 @@ export default function VoiceConversation() {
     }
   }, [cleanupMic]);
 
-  // ── Derived helpers ───────────────────────────────────────────────────
   const isCallActive = callState !== "idle" && callState !== "connecting";
   const isListening  = callState === "listening";
-  const isSpeaking   = callState === "speaking"; // used by AiOrb + AiWaveform
+  const isSpeaking   = callState === "speaking";
 
-  // ── Render ────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full bg-slate-950 text-white overflow-hidden">
 
-      {/* ── Header ────────────────────────────────────────────────── */}
+      {/* ── Header ──────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800/60 bg-slate-900/80 backdrop-blur-sm flex-shrink-0">
         <Button
           variant="ghost"
@@ -487,32 +538,25 @@ export default function VoiceConversation() {
             <span className="text-xs text-slate-500 tabular-nums">{formatDuration(duration)}</span>
           )}
         </div>
-        {/* Status chip */}
-        <div
-          className={cn(
-            "px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-all duration-300",
-            isListening  && "bg-red-500/20 text-red-300 border border-red-500/30",
-            isSpeaking   && "bg-blue-500/20 text-blue-300 border border-blue-500/30",
-            callState === "processing" && "bg-amber-500/20 text-amber-300 border border-amber-500/30",
-            !isListening && !isSpeaking && callState !== "processing" && "bg-slate-800 text-slate-400 border border-slate-700",
-          )}
-        >
+        <div className={cn(
+          "px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-all duration-300",
+          isListening  && "bg-red-500/20 text-red-300 border border-red-500/30",
+          isSpeaking   && "bg-blue-500/20 text-blue-300 border border-blue-500/30",
+          callState === "processing" && "bg-amber-500/20 text-amber-300 border border-amber-500/30",
+          !isListening && !isSpeaking && callState !== "processing" && "bg-slate-800 text-slate-400 border border-slate-700",
+        )}>
           {STATE_LABEL[callState]}
         </div>
       </div>
 
-      {/* ── Central visual area ───────────────────────────────────── */}
+      {/* ── Central visual area ──────────────────────────────────── */}
       <div className="flex-1 flex flex-col items-center justify-center gap-5 px-4 min-h-0">
-
         {!isCallActive ? (
-          /* ── Idle / Start screen ─────────────────────────────── */
           <div className="flex flex-col items-center gap-6">
             <div className="w-24 h-24 rounded-full bg-slate-800 flex items-center justify-center shadow-[0_0_40px_rgba(0,0,0,0.5)]">
               <PhoneCall className="w-10 h-10 text-slate-400" />
             </div>
-            <div className="text-center">
-              <p className="text-slate-400 text-sm">Start a voice conversation with your book</p>
-            </div>
+            <p className="text-slate-400 text-sm">Start a voice conversation with your book</p>
             <Button
               size="lg"
               className="rounded-full h-14 px-10 gap-2 text-base bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-900/40"
@@ -526,28 +570,21 @@ export default function VoiceConversation() {
             </Button>
           </div>
         ) : (
-          /* ── Active call visual ───────────────────────────────── */
           <>
             <AiOrb state={callState} />
-
-            {/* Waveform / level indicator */}
             <div className="h-12 flex items-center justify-center">
               {isListening
                 ? <MicWaveform levels={micLevels} />
                 : <AiWaveform  active={isSpeaking} />
               }
             </div>
-
-            {/* State label */}
-            <p
-              className={cn(
-                "text-sm font-medium tracking-wide transition-colors duration-300",
-                isListening  && "text-red-400",
-                isSpeaking   && "text-blue-400",
-                callState === "processing" && "text-amber-400",
-                callState === "ready"      && "text-slate-400",
-              )}
-            >
+            <p className={cn(
+              "text-sm font-medium tracking-wide transition-colors duration-300",
+              isListening  && "text-red-400",
+              isSpeaking   && "text-blue-400",
+              callState === "processing" && "text-amber-400",
+              callState === "ready"      && "text-slate-400",
+            )}>
               {STATE_LABEL[callState]}
             </p>
           </>
@@ -556,13 +593,10 @@ export default function VoiceConversation() {
 
       {/* ── Transcript panel ─────────────────────────────────────── */}
       {isCallActive && (
-        <div
-          className={cn(
-            "flex-shrink-0 border-t border-slate-800/60 bg-slate-900/70 backdrop-blur-sm transition-all duration-300",
-            transcriptOpen ? "h-96" : "h-10",
-          )}
-        >
-          {/* Toggle header */}
+        <div className={cn(
+          "flex-shrink-0 border-t border-slate-800/60 bg-slate-900/70 backdrop-blur-sm transition-all duration-300",
+          transcriptOpen ? "h-96" : "h-10",
+        )}>
           <button
             className="w-full flex items-center justify-between px-4 h-10 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors"
             onClick={() => setTranscriptOpen(o => !o)}
@@ -591,8 +625,6 @@ export default function VoiceConversation() {
       {/* ── Controls ─────────────────────────────────────────────── */}
       {isCallActive && (
         <div className="flex-shrink-0 flex items-center justify-center gap-12 py-5 bg-slate-900/80 border-t border-slate-800/60">
-
-          {/* Mic button */}
           <div className="flex flex-col items-center gap-1.5">
             <button
               className={cn(
@@ -616,7 +648,6 @@ export default function VoiceConversation() {
             </span>
           </div>
 
-          {/* End call button */}
           <div className="flex flex-col items-center gap-1.5">
             <button
               className="w-16 h-16 rounded-full bg-red-700 hover:bg-red-600 flex items-center justify-center shadow-lg shadow-red-900/50 transition-all duration-200 focus:outline-none"
