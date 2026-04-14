@@ -1,316 +1,635 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router";
 import { useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Mic, MicOff, ArrowLeft, Loader2 } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Mic, MicOff, PhoneOff, ArrowLeft, Loader2, PhoneCall, ChevronUp, ChevronDown } from "lucide-react";
 import { io, Socket } from "socket.io-client";
+import { cn } from "@/lib/utils";
 
 const VOICE_SERVICE_URL = import.meta.env.VITE_VOICE_SERVICE_URL;
 
+// ── Types ──────────────────────────────────────────────────────────────────
+type CallState = "idle" | "connecting" | "ready" | "listening" | "processing" | "speaking";
+
 type Message = {
+  id: string;
   role: "user" | "assistant";
   text: string;
+  ts: Date;
+  pending?: boolean; // user message waiting for transcription
 };
 
+const STATE_LABEL: Record<CallState, string> = {
+  idle:        "Ready to start",
+  connecting:  "Connecting…",
+  ready:       "Tap mic to speak",
+  listening:   "Listening…",
+  processing:  "Thinking…",
+  speaking:    "Speaking…",
+};
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+function formatDuration(s: number) {
+  const m = Math.floor(s / 60).toString().padStart(2, "0");
+  const sec = (s % 60).toString().padStart(2, "0");
+  return `${m}:${sec}`;
+}
+
+function uid() {
+  return Math.random().toString(36).slice(2);
+}
+
+// ── Waveform bars: CSS-animated for AI speaking ───────────────────────────
+function AiWaveform({ active }: { active: boolean }) {
+  const bars = [0.4, 0.7, 1, 0.85, 0.6, 0.9, 0.5];
+  return (
+    <>
+      <style>{`
+        @keyframes ai-wave {
+          0%, 100% { transform: scaleY(0.12); }
+          50%       { transform: scaleY(1); }
+        }
+      `}</style>
+      <div className="flex items-end justify-center gap-1 h-10">
+        {bars.map((peak, i) => (
+          <div
+            key={i}
+            className="w-1.5 rounded-full bg-blue-400 origin-bottom"
+            style={
+              active
+                ? {
+                    height: `${peak * 40}px`,
+                    animation: `ai-wave ${0.55 + i * 0.07}s ease-in-out infinite`,
+                    animationDelay: `${i * 0.09}s`,
+                  }
+                : { height: "3px", transition: "height 0.3s" }
+            }
+          />
+        ))}
+      </div>
+    </>
+  );
+}
+
+// ── Mic level bars: driven by AnalyserNode data ───────────────────────────
+function MicWaveform({ levels }: { levels: number[] }) {
+  return (
+    <div className="flex items-end justify-center gap-0.5 h-10">
+      {levels.map((lvl, i) => (
+        <div
+          key={i}
+          className="w-1 rounded-full bg-red-400"
+          style={{ height: `${Math.max(3, lvl * 38)}px`, transition: "height 70ms" }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ── Central AI orb ────────────────────────────────────────────────────────
+function AiOrb({ state }: { state: CallState }) {
+  const isSpeaking   = state === "speaking";
+  const isListening  = state === "listening";
+  const isProcessing = state === "processing";
+
+  return (
+    <div className="relative flex items-center justify-center w-48 h-48">
+      {/* Outer ring – slow pulse */}
+      <div
+        className={cn(
+          "absolute inset-0 rounded-full transition-all duration-700",
+          isSpeaking  && "bg-blue-500/10 animate-ping",
+          isListening && "bg-red-500/10 animate-ping",
+        )}
+      />
+      {/* Mid ring */}
+      <div
+        className={cn(
+          "absolute w-36 h-36 rounded-full transition-all duration-500",
+          isSpeaking  && "bg-blue-500/15 animate-pulse",
+          isListening && "bg-red-500/15 animate-pulse",
+          isProcessing && "bg-amber-500/10 animate-pulse",
+        )}
+      />
+      {/* Core orb */}
+      <div
+        className={cn(
+          "relative w-24 h-24 rounded-full flex items-center justify-center transition-all duration-500",
+          isSpeaking  && "bg-blue-600  shadow-[0_0_48px_rgba(59,130,246,0.55)]",
+          isListening && "bg-red-600   shadow-[0_0_48px_rgba(220,38,38,0.55)]",
+          isProcessing && "bg-amber-600 shadow-[0_0_48px_rgba(217,119,6,0.45)]",
+          !isSpeaking && !isListening && !isProcessing && "bg-slate-700 shadow-[0_0_24px_rgba(0,0,0,0.4)]",
+        )}
+      >
+        {/* Spinning border while processing */}
+        {isProcessing && (
+          <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-amber-400 animate-spin" />
+        )}
+        {/* Icon */}
+        <svg viewBox="0 0 24 24" className="w-11 h-11 text-white" fill="currentColor">
+          <path d="M12 2a5 5 0 0 1 5 5v4a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5Zm-7 9a1 1 0 0 1 2 0 5 5 0 0 0 10 0 1 1 0 1 1 2 0 7 7 0 0 1-6 6.92V19h2a1 1 0 1 1 0 2H9a1 1 0 1 1 0-2h2v-1.08A7 7 0 0 1 5 11Z" />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+// ── Typing dots (pending user message) ───────────────────────────────────
+function TypingDots() {
+  return (
+    <>
+      <style>{`
+        @keyframes dot-bounce {
+          0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+          40%            { transform: translateY(-4px); opacity: 1; }
+        }
+      `}</style>
+      <div className="flex items-center gap-1 py-0.5">
+        {[0, 1, 2].map(i => (
+          <span
+            key={i}
+            className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block"
+            style={{ animation: `dot-bounce 1.2s ease-in-out infinite`, animationDelay: `${i * 0.2}s` }}
+          />
+        ))}
+      </div>
+    </>
+  );
+}
+
+// ── Message bubble ────────────────────────────────────────────────────────
+function MessageBubble({ msg }: { msg: Message }) {
+  const isUser = msg.role === "user";
+  return (
+    <div className={cn("flex gap-2.5 px-4", isUser ? "flex-row-reverse" : "flex-row")}>
+      {/* Avatar dot */}
+      <div
+        className={cn(
+          "flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold mt-0.5",
+          isUser ? "bg-slate-600 text-slate-200" : "bg-blue-600 text-white",
+        )}
+      >
+        {isUser ? "U" : "AI"}
+      </div>
+      <div className="flex flex-col gap-0.5 max-w-[78%]">
+        <div
+          className={cn(
+            "rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed",
+            isUser
+              ? "bg-slate-700 text-slate-100 rounded-tr-sm"
+              : "bg-slate-800 border border-slate-700 text-slate-100 rounded-tl-sm",
+          )}
+        >
+          {msg.pending ? <TypingDots /> : msg.text}
+        </div>
+        <span className={cn("text-[10px] text-slate-500", isUser ? "text-right" : "text-left")}>
+          {msg.ts.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────
 export default function VoiceConversation() {
-  const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
-  
   const { bookId } = useParams();
   const navigate = useNavigate();
   const { data: session } = useSession();
 
-  const [connected, setConnected] = useState(false);
-  const [recording, setRecording] = useState(false);
+  // ── State ─────────────────────────────────────────────────────────────
+  const [callState, setCallState] = useState<CallState>("idle");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [status, setStatus] = useState("Click mic to start");
+  const [duration, setDuration] = useState(0);
+  const [micLevels, setMicLevels] = useState<number[]>(Array(18).fill(0));
+  const [transcriptOpen, setTranscriptOpen] = useState(true);
 
-  const socketRef = useRef<Socket | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  // ── Refs ──────────────────────────────────────────────────────────────
+  const socketRef        = useRef<Socket | null>(null);
+  const micRef           = useRef<{
+    stream: MediaStream;
+    processor: ScriptProcessorNode;
+    source: MediaStreamAudioSourceNode;
+    analyser: AnalyserNode;
+    silentGain: GainNode;
+    animFrame: number;
+    ctx: AudioContext;
+  } | null>(null);
+  const playCtxRef       = useRef<AudioContext | null>(null);
+  const activeSourceRef  = useRef<AudioBufferSourceNode | null>(null);
+  const audioQueueRef    = useRef<Float32Array[]>([]);
+  const isPlayingRef     = useRef(false);
+  const durationRef          = useRef<ReturnType<typeof setInterval> | null>(null);
+  const messagesEndRef       = useRef<HTMLDivElement>(null);
+  const callStateRef         = useRef<CallState>("idle");
+  const pendingUserMsgIdRef  = useRef<string | null>(null);
 
+  // keep ref in sync so audio callbacks can read latest state
+  useEffect(() => { callStateRef.current = callState; }, [callState]);
+
+  // Auto-scroll transcript
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Duration timer
+  useEffect(() => {
+    if (callState !== "idle" && callState !== "connecting") {
+      durationRef.current = setInterval(() => setDuration(d => d + 1), 1000);
+    } else {
+      if (durationRef.current) clearInterval(durationRef.current);
+      setDuration(0);
+    }
+    return () => { if (durationRef.current) clearInterval(durationRef.current); };
+  }, [callState]);
+
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      stopRecording();
+      cleanupMic();
       socketRef.current?.disconnect();
+      if (durationRef.current) clearInterval(durationRef.current);
     };
   }, []);
 
-  const connectToVoiceService = async () => {
+  // ── Mic cleanup ───────────────────────────────────────────────────────
+  const cleanupMic = useCallback(() => {
+    if (micRef.current) {
+      cancelAnimationFrame(micRef.current.animFrame);
+      micRef.current.processor.disconnect();
+      micRef.current.source.disconnect();
+      micRef.current.analyser.disconnect();
+      micRef.current.silentGain.disconnect();
+      micRef.current.stream.getTracks().forEach(t => t.stop());
+      micRef.current.ctx.close().catch(() => {});
+      micRef.current = null;
+    }
+    setMicLevels(Array(18).fill(0));
+  }, []);
+
+  // ── Audio playback ────────────────────────────────────────────────────
+  const playAudioQueue = useCallback(async (ctx: AudioContext) => {
+    if (isPlayingRef.current || audioQueueRef.current.length === 0) return;
+    isPlayingRef.current = true;
+    setCallState("speaking");
+
+    while (audioQueueRef.current.length > 0) {
+      const float32 = audioQueueRef.current.shift()!;
+      const buffer  = ctx.createBuffer(1, float32.length, 24000);
+      buffer.copyToChannel(float32, 0);
+
+      const source = ctx.createBufferSource();
+      activeSourceRef.current = source;
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+
+      await new Promise<void>(resolve => {
+        source.onended = () => { activeSourceRef.current = null; resolve(); };
+        source.start();
+      });
+    }
+
+    isPlayingRef.current = false;
+    // Only move back to ready if we haven't already switched to listening
+    setCallState(prev => prev === "speaking" ? "ready" : prev);
+  }, []);
+
+  const playAudioChunk = useCallback(async (base64Audio: string) => {
+    try {
+      if (!playCtxRef.current) {
+        playCtxRef.current = new AudioContext({ sampleRate: 24000 });
+      }
+      const ctx    = playCtxRef.current;
+      const binary = atob(base64Audio);
+      const bytes  = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+      const pcm    = new Int16Array(bytes.buffer);
+      const f32    = new Float32Array(pcm.length);
+      for (let i = 0; i < pcm.length; i++) f32[i] = pcm[i] / 32768;
+
+      audioQueueRef.current.push(f32);
+      playAudioQueue(ctx);
+    } catch (e) {
+      console.error("Playback error", e);
+    }
+  }, [playAudioQueue]);
+
+  // ── Socket / call logic ───────────────────────────────────────────────
+  const startCall = useCallback(async () => {
     if (!session?.user || !bookId) return;
-    if (socketRef.current?.connected) return; // prevent reconnection
-
-
-    setStatus("Connecting...");
+    setCallState("connecting");
 
     const socket = io(`${VOICE_SERVICE_URL}/voice`, {
       transports: ["polling", "websocket"],
     });
-
     socketRef.current = socket;
 
     socket.on("connect", () => {
-      console.log("Socket connected:", socket.id);
-      socket.emit("start-session", {
-        bookId,
-        userId: session.user.id,
-      });
+      socket.emit("start-session", { bookId, userId: session.user.id });
     });
 
     socket.on("session-ready", (data: { sessionId: string }) => {
-      console.log("Session ready:", data);
       setSessionId(data.sessionId);
-      setConnected(true);
-      setStatus("Connected — tap mic to speak");
+      setCallState("ready");
     });
 
     socket.on("openai-event", (event: any) => {
-      if (
-        event.type === "conversation.item.created" &&
-        event.item?.role === "user" &&
-        event.item?.content?.[0]?.transcript
-      ) {
-        setMessages(prev => [
-          ...prev,
-          { role: "user", text: event.item.content[0].transcript },
-        ]);
+      // User speech transcript — resolve the pending placeholder bubble
+      if (event.type === "conversation.item.input_audio_transcription.completed") {
+        const transcript = event.transcript?.trim();
+        if (transcript) {
+          if (pendingUserMsgIdRef.current) {
+            // Update the placeholder with the real text
+            setMessages(prev =>
+              prev.map(m =>
+                m.id === pendingUserMsgIdRef.current
+                  ? { ...m, text: transcript, pending: false }
+                  : m
+              )
+            );
+            pendingUserMsgIdRef.current = null;
+          } else {
+            setMessages(prev => [...prev, { id: uid(), role: "user", text: transcript, ts: new Date() }]);
+          }
+        }
       }
-
+      // AI response transcript
       if (event.type === "response.audio_transcript.done") {
-        setMessages(prev => [
-          ...prev,
-          { role: "assistant", text: event.transcript },
-        ]);
+        setMessages(prev => [...prev, { id: uid(), role: "assistant", text: event.transcript, ts: new Date() }]);
       }
-
+      // AI audio chunks
       if (event.type === "response.audio.delta" && event.delta) {
         playAudioChunk(event.delta);
       }
     });
 
-    socket.on("session-ended", () => {
-      setConnected(false);
-      setStatus("Session ended");
+    socket.on("disconnect", () => {
+      setCallState("idle");
     });
+  }, [session, bookId, playAudioChunk]);
 
-    socket.on("connect_error", (err) => {
-      console.error("Connect error:", err.message);
-      setStatus(`Connection error: ${err.message}`);
-    });
-
-    socket.on("disconnect", (reason) => {
-      console.log("Socket disconnected:", reason);
-      setConnected(false);
-    });
-
-    socket.on("error", (err: { message: string }) => {
-      setStatus(`Error: ${err.message}`);
-      setConnected(false);
-    });
-  };
-
-  const audioQueueRef = useRef<Float32Array[]>([]);
-  const isPlayingRef = useRef(false);
-
-  const playAudioQueue = async (ctx: AudioContext) => {
-    if (isPlayingRef.current || audioQueueRef.current.length === 0) return;
-    isPlayingRef.current = true;
-
-    while (audioQueueRef.current.length > 0) {
-      const float32 = audioQueueRef.current.shift()!;
-      const buffer = ctx.createBuffer(1, float32.length, 24000);
-      buffer.copyToChannel(float32, 0);
-      
-      const source = ctx.createBufferSource();
-      activeSourceRef.current = source; // Store reference
-      
-      source.buffer = buffer;
-      source.connect(ctx.destination);
-      
-      await new Promise<void>(resolve => {
-        source.onended = () => {
-          activeSourceRef.current = null;
-          resolve();
-        };
-        source.start();
-      });
-    }
-    
-    isPlayingRef.current = false;
-  };
-
-  const playAudioChunk = async (base64Audio: string) => {
-    try {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new AudioContext({ sampleRate: 24000 });
-      }
-      const ctx = audioContextRef.current;
-      const binary = atob(base64Audio);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-      }
-
-      const pcm = new Int16Array(bytes.buffer);
-      const float32 = new Float32Array(pcm.length);
-      for (let i = 0; i < pcm.length; i++) {
-        float32[i] = pcm[i] / 32768;
-      }
-
-      audioQueueRef.current.push(float32);
-      playAudioQueue(ctx);
-    } catch (e) {
-      console.error("Audio playback error", e);
-    }
-  };
-
-  const startRecording = async () => {
-    if (!connected) {
-      await connectToVoiceService();
-      return;
-    }
-
-    // --- NEW BARGE-IN LOGIC START ---
-    // 1. Stop current audio playing in browser
+  const endSession = useCallback(() => {
+    // Stop all in-flight audio immediately
     if (activeSourceRef.current) {
-      activeSourceRef.current.stop();
+      try { activeSourceRef.current.stop(); } catch {}
       activeSourceRef.current = null;
     }
-    // 2. Clear the pending queue
     audioQueueRef.current = [];
-    isPlayingRef.current = false;
-
-    // 3. (Optional but recommended) Emit a cancel event to the backend 
-    // so the backend can send 'response.cancel' to OpenAI
-    socketRef.current?.emit("cancel-ai-response"); 
-    // --- NEW BARGE-IN LOGIC END ---
-
-  try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          sampleRate: 24000,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-        }
-      });
-
-      const audioContext = new AudioContext({ sampleRate: 24000 });
-      audioContextRef.current = audioContext;
-      const source = audioContext.createMediaStreamSource(stream);
-      const processor = audioContext.createScriptProcessor(4096, 1, 1);
-
-      processor.onaudioprocess = (e) => {
-        const float32 = e.inputBuffer.getChannelData(0);
-        const pcm16 = new Int16Array(float32.length);
-        for (let i = 0; i < float32.length; i++) {
-          pcm16[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768));
-        }
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(pcm16.buffer)));
-        console.log("Sending audio chunk, length:", base64.length); // add this
-        socketRef.current?.emit("send-audio", { audio: base64 });
-      };
-
-      source.connect(processor);
-      processor.connect(audioContext.destination);
-
-      mediaRecorderRef.current = { stream, processor, source } as any;
-      setRecording(true);
-      setStatus("Listening...");
-    } catch (e) {
-      setStatus("Microphone access denied");
+    isPlayingRef.current  = false;
+    if (playCtxRef.current) {
+      playCtxRef.current.close().catch(() => {});
+      playCtxRef.current = null;
     }
-  };
 
-  const stopRecording = () => {
-    const recorder = mediaRecorderRef.current as any;
-    if (recorder) {
-      recorder.processor?.disconnect();
-      recorder.source?.disconnect();
-      recorder.stream?.getTracks().forEach((t: any) => t.stop());
-      mediaRecorderRef.current = null;
-    }
-    if (recording) {
-      socketRef.current?.emit("commit-audio");
-      setRecording(false);
-      setStatus("Processing...");
-    }
-  };
-
-  const endSession = () => {
-    if (sessionId) {
-      socketRef.current?.emit("end-session", { sessionId });
-    }
+    if (sessionId) socketRef.current?.emit("end-session", { sessionId });
+    cleanupMic();
     socketRef.current?.disconnect();
+    setCallState("idle");
+    setMessages([]);
     navigate("/voice");
-  };
+  }, [sessionId, cleanupMic, navigate]);
 
+  // ── Mic toggle ────────────────────────────────────────────────────────
+  const toggleMic = useCallback(async () => {
+    const state = callStateRef.current;
+
+    if (state === "ready") {
+      // ── Unmute — only allowed once AI has finished speaking ────────
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { sampleRate: 24000, channelCount: 1, echoCancellation: true, noiseSuppression: true },
+        });
+
+        const ctx      = new AudioContext({ sampleRate: 24000 });
+        const source   = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 64;
+
+        const processor = ctx.createScriptProcessor(4096, 1, 1);
+
+        processor.onaudioprocess = e => {
+          const float32 = e.inputBuffer.getChannelData(0);
+          const pcm16   = new Int16Array(float32.length);
+          for (let i = 0; i < float32.length; i++) {
+            pcm16[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768));
+          }
+          const base64 = btoa(String.fromCharCode(...new Uint8Array(pcm16.buffer)));
+          socketRef.current?.emit("send-audio", { audio: base64 });
+        };
+
+        // Route mic through a zero-gain node so onaudioprocess fires
+        // but mic audio is never leaked to the speaker (which would boost
+        // perceived volume and cause echo).
+        const silentGain = ctx.createGain();
+        silentGain.gain.value = 0;
+
+        source.connect(analyser);
+        source.connect(processor);
+        processor.connect(silentGain);
+        silentGain.connect(ctx.destination);
+
+        // Animation loop for mic level visualizer
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        const tick = () => {
+          analyser.getByteFrequencyData(data);
+          const levels = Array.from({ length: 18 }, (_, i) => {
+            const idx = Math.floor((i / 18) * data.length);
+            return data[idx] / 255;
+          });
+          setMicLevels(levels);
+          micRef.current!.animFrame = requestAnimationFrame(tick);
+        };
+        const animFrame = requestAnimationFrame(tick);
+
+        micRef.current = { stream, processor, source, analyser, silentGain, animFrame, ctx };
+        setCallState("listening");
+      } catch {
+        setCallState("ready");
+      }
+    } else if (state === "listening") {
+      // ── Mute / commit — add placeholder, then trigger AI response ──
+      cleanupMic();
+
+      // Show a pending bubble immediately so the user sees their turn
+      const msgId = uid();
+      pendingUserMsgIdRef.current = msgId;
+      setMessages(prev => [...prev, { id: msgId, role: "user", text: "", ts: new Date(), pending: true }]);
+
+      socketRef.current?.emit("commit-audio");
+      setCallState("processing");
+    }
+  }, [cleanupMic]);
+
+  // ── Derived helpers ───────────────────────────────────────────────────
+  const isCallActive = callState !== "idle" && callState !== "connecting";
+  const isListening  = callState === "listening";
+  const isSpeaking   = callState === "speaking"; // used by AiOrb + AiWaveform
+
+  // ── Render ────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full p-6 gap-4">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={endSession}>
+    <div className="flex flex-col h-full bg-slate-950 text-white overflow-hidden">
+
+      {/* ── Header ────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800/60 bg-slate-900/80 backdrop-blur-sm flex-shrink-0">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-slate-400 hover:text-white hover:bg-slate-800"
+          onClick={() => (isCallActive ? endSession() : navigate("/voice"))}
+        >
           <ArrowLeft className="w-4 h-4" />
         </Button>
-        <div>
-          <h1 className="text-2xl font-bold">Voice Conversation</h1>
-          <p className="text-sm text-muted-foreground">{status}</p>
+        <div className="flex flex-col items-center">
+          <span className="text-sm font-semibold text-slate-200">AI Voice Chat</span>
+          {isCallActive && (
+            <span className="text-xs text-slate-500 tabular-nums">{formatDuration(duration)}</span>
+          )}
+        </div>
+        {/* Status chip */}
+        <div
+          className={cn(
+            "px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-all duration-300",
+            isListening  && "bg-red-500/20 text-red-300 border border-red-500/30",
+            isSpeaking   && "bg-blue-500/20 text-blue-300 border border-blue-500/30",
+            callState === "processing" && "bg-amber-500/20 text-amber-300 border border-amber-500/30",
+            !isListening && !isSpeaking && callState !== "processing" && "bg-slate-800 text-slate-400 border border-slate-700",
+          )}
+        >
+          {STATE_LABEL[callState]}
         </div>
       </div>
 
-      <Card className="flex-1 overflow-hidden">
-        <CardContent className="h-full overflow-y-auto p-4 flex flex-col gap-3">
-          {messages.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-              Your conversation will appear here
-            </div>
-          ) : (
-            messages.map((msg, i) => (
-              <div
-                key={i}
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-[80%] rounded-lg px-4 py-2 text-sm ${
-                    msg.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-foreground"
-                  }`}
-                >
-                  {msg.text}
-                </div>
-              </div>
-            ))
-          )}
-          <div ref={messagesEndRef} />
-        </CardContent>
-      </Card>
+      {/* ── Central visual area ───────────────────────────────────── */}
+      <div className="flex-1 flex flex-col items-center justify-center gap-5 px-4 min-h-0">
 
-      <div className="flex flex-col items-center gap-3">
-        <Button
-          size="lg"
-          variant={recording ? "destructive" : "default"}
-          className="rounded-full w-16 h-16"
-          onClick={recording ? stopRecording : startRecording}
-          disabled={status === "Connecting..." || status === "Processing..."}
-        >
-          {status === "Connecting..." || status === "Processing..." ? (
-            <Loader2 className="w-6 h-6 animate-spin" />
-          ) : recording ? (
-            <MicOff className="w-6 h-6" />
-          ) : (
-            <Mic className="w-6 h-6" />
-          )}
-        </Button>
-        <p className="text-xs text-muted-foreground">
-          {recording ? "Tap to stop" : connected ? "Tap to speak" : "Tap to connect"}
-        </p>
+        {!isCallActive ? (
+          /* ── Idle / Start screen ─────────────────────────────── */
+          <div className="flex flex-col items-center gap-6">
+            <div className="w-24 h-24 rounded-full bg-slate-800 flex items-center justify-center shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+              <PhoneCall className="w-10 h-10 text-slate-400" />
+            </div>
+            <div className="text-center">
+              <p className="text-slate-400 text-sm">Start a voice conversation with your book</p>
+            </div>
+            <Button
+              size="lg"
+              className="rounded-full h-14 px-10 gap-2 text-base bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-900/40"
+              onClick={startCall}
+              disabled={callState === "connecting"}
+            >
+              {callState === "connecting"
+                ? <><Loader2 className="w-5 h-5 animate-spin" /> Connecting…</>
+                : <><PhoneCall className="w-5 h-5" /> Start Call</>
+              }
+            </Button>
+          </div>
+        ) : (
+          /* ── Active call visual ───────────────────────────────── */
+          <>
+            <AiOrb state={callState} />
+
+            {/* Waveform / level indicator */}
+            <div className="h-12 flex items-center justify-center">
+              {isListening
+                ? <MicWaveform levels={micLevels} />
+                : <AiWaveform  active={isSpeaking} />
+              }
+            </div>
+
+            {/* State label */}
+            <p
+              className={cn(
+                "text-sm font-medium tracking-wide transition-colors duration-300",
+                isListening  && "text-red-400",
+                isSpeaking   && "text-blue-400",
+                callState === "processing" && "text-amber-400",
+                callState === "ready"      && "text-slate-400",
+              )}
+            >
+              {STATE_LABEL[callState]}
+            </p>
+          </>
+        )}
       </div>
+
+      {/* ── Transcript panel ─────────────────────────────────────── */}
+      {isCallActive && (
+        <div
+          className={cn(
+            "flex-shrink-0 border-t border-slate-800/60 bg-slate-900/70 backdrop-blur-sm transition-all duration-300",
+            transcriptOpen ? "h-96" : "h-10",
+          )}
+        >
+          {/* Toggle header */}
+          <button
+            className="w-full flex items-center justify-between px-4 h-10 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors"
+            onClick={() => setTranscriptOpen(o => !o)}
+          >
+            <span>Transcript{messages.length > 0 ? ` (${messages.length})` : ""}</span>
+            {transcriptOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+          </button>
+
+          {transcriptOpen && (
+            <ScrollArea className="h-[calc(100%-40px)]">
+              <div className="flex flex-col gap-3 py-2 pb-3">
+                {messages.length === 0 ? (
+                  <p className="text-center text-xs text-slate-600 py-6">
+                    Your conversation will appear here
+                  </p>
+                ) : (
+                  messages.map(msg => <MessageBubble key={msg.id} msg={msg} />)
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+            </ScrollArea>
+          )}
+        </div>
+      )}
+
+      {/* ── Controls ─────────────────────────────────────────────── */}
+      {isCallActive && (
+        <div className="flex-shrink-0 flex items-center justify-center gap-12 py-5 bg-slate-900/80 border-t border-slate-800/60">
+
+          {/* Mic button */}
+          <div className="flex flex-col items-center gap-1.5">
+            <button
+              className={cn(
+                "w-16 h-16 rounded-full flex items-center justify-center transition-all duration-200 shadow-lg focus:outline-none",
+                isListening
+                  ? "bg-red-600 hover:bg-red-500 shadow-red-900/50 ring-4 ring-red-500/25"
+                  : callState !== "ready"
+                    ? "bg-slate-700 cursor-not-allowed opacity-40"
+                    : "bg-slate-700 hover:bg-slate-600 shadow-slate-900/50",
+              )}
+              onClick={toggleMic}
+              disabled={callState !== "ready" && callState !== "listening"}
+            >
+              {isListening
+                ? <MicOff className="w-7 h-7 text-white" />
+                : <Mic    className="w-7 h-7 text-white" />
+              }
+            </button>
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+              {isListening ? "Done" : "Speak"}
+            </span>
+          </div>
+
+          {/* End call button */}
+          <div className="flex flex-col items-center gap-1.5">
+            <button
+              className="w-16 h-16 rounded-full bg-red-700 hover:bg-red-600 flex items-center justify-center shadow-lg shadow-red-900/50 transition-all duration-200 focus:outline-none"
+              onClick={endSession}
+            >
+              <PhoneOff className="w-7 h-7 text-white" />
+            </button>
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+              End
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
