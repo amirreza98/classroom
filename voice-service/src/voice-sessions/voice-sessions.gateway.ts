@@ -17,7 +17,13 @@ const clientOpenAIMap = new Map<string, WebSocket>();
 const clientBookMap = new Map<string, string>();
 
 @WebSocketGateway({
-  cors: { origin: '*' },
+  cors: {
+    origin: [
+      'http://localhost:5173',
+      'https://classroom-nine-omega.vercel.app',
+    ],
+    credentials: true,
+  },
   namespace: 'voice',
 })
 export class VoiceSessionsGateway implements OnGatewayDisconnect {
