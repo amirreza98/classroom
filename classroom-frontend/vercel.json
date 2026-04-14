@@ -5,8 +5,12 @@
       "destination": "http://54.91.231.54:8000/api/:path*"
     },
     {
-      "source": "/voice/:path*",
+      "source": "/voice-service/:path*",
       "destination": "http://54.91.231.54:3001/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
