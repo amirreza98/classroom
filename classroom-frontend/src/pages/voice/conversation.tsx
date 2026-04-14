@@ -14,6 +14,8 @@ type Message = {
 };
 
 export default function VoiceConversation() {
+  const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  
   const { bookId } = useParams();
   const navigate = useNavigate();
   const { data: session } = useSession();
@@ -124,12 +126,18 @@ export default function VoiceConversation() {
       const float32 = audioQueueRef.current.shift()!;
       const buffer = ctx.createBuffer(1, float32.length, 24000);
       buffer.copyToChannel(float32, 0);
+      
       const source = ctx.createBufferSource();
+      activeSourceRef.current = source; // Store reference
+      
       source.buffer = buffer;
       source.connect(ctx.destination);
       
       await new Promise<void>(resolve => {
-        source.onended = () => resolve();
+        source.onended = () => {
+          activeSourceRef.current = null;
+          resolve();
+        };
         source.start();
       });
     }
@@ -168,7 +176,22 @@ export default function VoiceConversation() {
       return;
     }
 
-    try {
+    // --- NEW BARGE-IN LOGIC START ---
+    // 1. Stop current audio playing in browser
+    if (activeSourceRef.current) {
+      activeSourceRef.current.stop();
+      activeSourceRef.current = null;
+    }
+    // 2. Clear the pending queue
+    audioQueueRef.current = [];
+    isPlayingRef.current = false;
+
+    // 3. (Optional but recommended) Emit a cancel event to the backend 
+    // so the backend can send 'response.cancel' to OpenAI
+    socketRef.current?.emit("cancel-ai-response"); 
+    // --- NEW BARGE-IN LOGIC END ---
+
+  try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           sampleRate: 24000,

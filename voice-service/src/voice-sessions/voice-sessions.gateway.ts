@@ -75,18 +75,34 @@ export class VoiceSessionsGateway implements OnGatewayDisconnect {
 
         openAIws.on('open', async () => {
           // fetch some segments to give context
-          const segments = await this.voiceSessionsService.getBookContext(bookId);
-          
+          const segmentsData = await this.voiceSessionsService.getBookContext(bookId);
+
+          console.log('CONTEXT SENT TO OPENAI:', JSON.stringify(segmentsData).substring(0, 500)); // Log the first 500 chars
+
+          const contextString = Array.isArray(segmentsData) 
+            ? segmentsData.map(s => s.content || s.text).join('\n') 
+            : segmentsData;
+
           openAIws.send(JSON.stringify({
             type: 'session.update',
             session: {
               modalities: ['audio', 'text'],
-              instructions: `You are an AI reading assistant. Always respond in English. 
-              You are helping the user with a book. Here is some content from the book:
+              instructions: `You are an AI reading assistant.
+              You MUST assume the user is referring to the book described below.
+              DO NOT ask which book the user means.
+
+              If the user asks general questions like "tell me about the book",
+              you MUST summarize the provided content.
+
+              BOOK CONTENT:
               
-              ${segments}
+              ${contextString}
               
-              Answer questions based on this content. Be conversational and concise.`,
+              Rules:
+              - Always answer based ONLY on the book content above
+              - If information is missing, say "This is not covered in the provided content"
+              - Be concise and conversational
+              `,
               voice: 'alloy',
               turn_detection: {
                 type: 'server_vad',
@@ -134,19 +150,24 @@ export class VoiceSessionsGateway implements OnGatewayDisconnect {
 
   // frontend sends audio chunks here
   @SubscribeMessage('send-audio')
-  handleAudio(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { audio: string }, // base64 encoded PCM16
-  ) {
-    console.log('Audio chunk received, length:', data.audio?.length);
-    const openAIws = clientOpenAIMap.get(client.id);
-    if (!openAIws || openAIws.readyState !== WebSocket.OPEN) return;
+    handleAudio(
+      @ConnectedSocket() client: Socket,
+      @MessageBody() data: { audio: string },
+    ) {
+      const openAIws = clientOpenAIMap.get(client.id);
+      if (!openAIws || openAIws.readyState !== WebSocket.OPEN) return;
 
-    openAIws.send(JSON.stringify({
-      type: 'input_audio_buffer.append',
-      audio: data.audio,
-    }));
-  }
+      // 1. Tell OpenAI to stop talking immediately if it was in the middle of a response
+      openAIws.send(JSON.stringify({ 
+        type: 'response.cancel' 
+      }));
+
+      // 2. Append the new audio
+      openAIws.send(JSON.stringify({
+        type: 'input_audio_buffer.append',
+        audio: data.audio,
+      }));
+    }
 
   // frontend signals user stopped speaking
   @SubscribeMessage('commit-audio')
@@ -156,6 +177,15 @@ export class VoiceSessionsGateway implements OnGatewayDisconnect {
 
     openAIws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
     openAIws.send(JSON.stringify({ type: 'response.create' }));
+  }
+
+  @SubscribeMessage('cancel-ai-response')
+  handleCancel(@ConnectedSocket() client: Socket) {
+    const openAIws = clientOpenAIMap.get(client.id);
+    if (openAIws && openAIws.readyState === WebSocket.OPEN) {
+      // This tells OpenAI to stop generating the current response
+      openAIws.send(JSON.stringify({ type: 'response.cancel' }));
+    }
   }
 
   @SubscribeMessage('end-session')
