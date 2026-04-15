@@ -201,6 +201,8 @@ Rules:
     const openAIws = clientOpenAIMap.get(client.id);
     if (openAIws && openAIws.readyState === WebSocket.OPEN) {
       openAIws.send(JSON.stringify({ type: 'response.cancel' }));
+      // Also clear the input buffer so stale audio doesn't bleed into the next question
+      openAIws.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
     }
   }
 

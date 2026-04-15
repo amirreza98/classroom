@@ -196,14 +196,8 @@ export default function VoiceConversation() {
   const messagesEndRef      = useRef<HTMLDivElement>(null);
   const callStateRef        = useRef<CallState>("idle");
   const pendingUserMsgIdRef = useRef<string | null>(null);
-  // Streaming assistant message id
   const streamingAiMsgIdRef = useRef<string | null>(null);
 
-  // ── FIX 1: separate active flag from node refs ────────────────────────
-  // The old code stored animFrame inside micRef and nulled micRef in cleanupMic,
-  // but the RAF tick() still ran one more frame after that, crashing on
-  // micRef.current.animFrame = ... where micRef.current was already null.
-  // Solution: a boolean flag that tick() checks BEFORE touching anything.
   const micActiveRef = useRef(false);
   const micNodeRefs  = useRef<{
     stream: MediaStream;
@@ -239,9 +233,9 @@ export default function VoiceConversation() {
     };
   }, []);
 
-  // ── Mic cleanup — flag first, then tear down ──────────────────────────
+  // ── Mic cleanup ───────────────────────────────────────────────────────
   const cleanupMic = useCallback(() => {
-    micActiveRef.current = false; // tick() will bail on next frame
+    micActiveRef.current = false;
     if (micNodeRefs.current) {
       const { animFrame, processor, source, analyser, silentGain, stream, ctx } = micNodeRefs.current;
       cancelAnimationFrame(animFrame);
@@ -254,6 +248,16 @@ export default function VoiceConversation() {
       micNodeRefs.current = null;
     }
     setMicLevels(Array(18).fill(0));
+  }, []);
+
+  // ── Stop AI audio immediately ─────────────────────────────────────────
+  const stopAiAudio = useCallback(() => {
+    audioQueueRef.current = [];
+    isPlayingRef.current  = false;
+    if (activeSourceRef.current) {
+      try { activeSourceRef.current.stop(); } catch (_) {}
+      activeSourceRef.current = null;
+    }
   }, []);
 
   // ── Audio playback ────────────────────────────────────────────────────
@@ -279,7 +283,6 @@ export default function VoiceConversation() {
     }
 
     isPlayingRef.current = false;
-    // Always unconditionally reset — old conditional guard caused lockout
     setCallState("ready");
   }, []);
 
@@ -325,8 +328,6 @@ export default function VoiceConversation() {
 
     socket.on("openai-event", (event: any) => {
 
-      // ── User transcript via Whisper ───────────────────────────────
-      // Requires backend session.update: { input_audio_transcription: { model: "whisper-1" } }
       if (event.type === "conversation.item.input_audio_transcription.completed") {
         const transcript = event.transcript?.trim();
         if (transcript && pendingUserMsgIdRef.current) {
@@ -341,12 +342,8 @@ export default function VoiceConversation() {
         }
       }
 
-      // ── FIX 2: AI transcript streaming (real-time feel) ───────────
-      // response.audio_transcript.delta fires with partial text chunks
-      // as the AI generates its response — we build up the bubble live
       if (event.type === "response.audio_transcript.delta" && event.delta) {
         setMessages(prev => {
-          // If there's already a streaming AI bubble, append to it
           if (streamingAiMsgIdRef.current) {
             return prev.map(m =>
               m.id === streamingAiMsgIdRef.current
@@ -354,14 +351,12 @@ export default function VoiceConversation() {
                 : m
             );
           }
-          // Otherwise create a new streaming bubble
           const newId = uid();
           streamingAiMsgIdRef.current = newId;
           return [...prev, { id: newId, role: "assistant", text: event.delta, ts: new Date(), pending: true }];
         });
       }
 
-      // ── AI transcript complete — finalize the streaming bubble ────
       if (event.type === "response.audio_transcript.done") {
         if (streamingAiMsgIdRef.current) {
           setMessages(prev =>
@@ -373,7 +368,6 @@ export default function VoiceConversation() {
           );
           streamingAiMsgIdRef.current = null;
         } else {
-          // Fallback if delta events didn't fire
           setMessages(prev => [...prev, { id: uid(), role: "assistant", text: event.transcript, ts: new Date() }]);
         }
         setTimeout(() => {
@@ -381,14 +375,10 @@ export default function VoiceConversation() {
         }, 300);
       }
 
-      // ── AI audio chunks ───────────────────────────────────────────
       if (event.type === "response.audio.delta" && event.delta) {
         playAudioChunk(event.delta);
       }
 
-      // ── FIX 3: response.done — ultimate safety net ────────────────
-      // If Whisper isn't enabled on the backend, user bubble stays as
-      // dots forever. We resolve it here with a fallback label.
       if (event.type === "response.done") {
         if (pendingUserMsgIdRef.current) {
           setMessages(prev =>
@@ -400,7 +390,6 @@ export default function VoiceConversation() {
           );
           pendingUserMsgIdRef.current = null;
         }
-        // Finalize any still-streaming AI bubble
         if (streamingAiMsgIdRef.current) {
           setMessages(prev =>
             prev.map(m =>
@@ -423,12 +412,7 @@ export default function VoiceConversation() {
   }, [session, bookId, playAudioChunk]);
 
   const endSession = useCallback(() => {
-    if (activeSourceRef.current) {
-      try { activeSourceRef.current.stop(); } catch {}
-      activeSourceRef.current = null;
-    }
-    audioQueueRef.current = [];
-    isPlayingRef.current  = false;
+    stopAiAudio();
     if (playCtxRef.current) {
       playCtxRef.current.close().catch(() => {});
       playCtxRef.current = null;
@@ -441,13 +425,33 @@ export default function VoiceConversation() {
     streamingAiMsgIdRef.current = null;
     pendingUserMsgIdRef.current = null;
     navigate("/voice");
-  }, [sessionId, cleanupMic, navigate]);
+  }, [sessionId, cleanupMic, stopAiAudio, navigate]);
 
   // ── Mic toggle ────────────────────────────────────────────────────────
   const toggleMic = useCallback(async () => {
     const state = callStateRef.current;
 
-    if (state === "ready") {
+    // ── BARGE-IN: user taps mic while AI is speaking ──────────────────
+    // Cancel the AI, flush audio, then fall through to start recording
+    if (state === "speaking") {
+      socketRef.current?.emit("cancel-ai-response");
+      stopAiAudio();
+      // Dismiss any streaming AI bubble that was cut off mid-sentence
+      if (streamingAiMsgIdRef.current) {
+        setMessages(prev =>
+          prev.map(m =>
+            m.id === streamingAiMsgIdRef.current ? { ...m, pending: false } : m
+          )
+        );
+        streamingAiMsgIdRef.current = null;
+      }
+      callStateRef.current = "ready";
+      setCallState("ready");
+      // Small tick so state settles before we open the mic
+      await new Promise(r => setTimeout(r, 30));
+    }
+
+    if (callStateRef.current === "ready") {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: { sampleRate: 24000, channelCount: 1, echoCancellation: true, noiseSuppression: true },
@@ -461,7 +465,7 @@ export default function VoiceConversation() {
         const processor = ctx.createScriptProcessor(4096, 1, 1);
 
         processor.onaudioprocess = e => {
-          if (!micActiveRef.current) return; // guard against post-cleanup firings
+          if (!micActiveRef.current) return;
           const float32 = e.inputBuffer.getChannelData(0);
           const pcm16   = new Int16Array(float32.length);
           for (let i = 0; i < float32.length; i++) {
@@ -481,9 +485,8 @@ export default function VoiceConversation() {
 
         const freqData = new Uint8Array(analyser.frequencyBinCount);
 
-        // ── FIX 1 cont: tick checks micActiveRef before writing to refs ──
         const tick = () => {
-          if (!micActiveRef.current) return; // bail — nodes may be gone
+          if (!micActiveRef.current) return;
           analyser.getByteFrequencyData(freqData);
           const levels = Array.from({ length: 18 }, (_, i) => {
             const idx = Math.floor((i / 18) * freqData.length);
@@ -491,20 +494,20 @@ export default function VoiceConversation() {
           });
           setMicLevels(levels);
           const nextFrame = requestAnimationFrame(tick);
-          // Safe to write: micActiveRef is true so micNodeRefs.current exists
           if (micNodeRefs.current) micNodeRefs.current.animFrame = nextFrame;
         };
 
         const animFrame = requestAnimationFrame(tick);
         micNodeRefs.current = { stream, processor, source, analyser, silentGain, animFrame, ctx };
-        micActiveRef.current = true; // set AFTER nodes are populated
+        micActiveRef.current = true;
 
         setCallState("listening");
       } catch {
         setCallState("ready");
       }
-    } else if (state === "listening") {
-      cleanupMic(); // sets micActiveRef.current = false first
+
+    } else if (callStateRef.current === "listening") {
+      cleanupMic();
 
       const msgId = uid();
       pendingUserMsgIdRef.current = msgId;
@@ -513,7 +516,7 @@ export default function VoiceConversation() {
       socketRef.current?.emit("commit-audio");
       setCallState("processing");
     }
-  }, [cleanupMic]);
+  }, [cleanupMic, stopAiAudio]);
 
   const isCallActive = callState !== "idle" && callState !== "connecting";
   const isListening  = callState === "listening";
@@ -631,12 +634,14 @@ export default function VoiceConversation() {
                 "w-16 h-16 rounded-full flex items-center justify-center transition-all duration-200 shadow-lg focus:outline-none",
                 isListening
                   ? "bg-red-600 hover:bg-red-500 shadow-red-900/50 ring-4 ring-red-500/25"
-                  : callState !== "ready"
-                    ? "bg-slate-700 cursor-not-allowed opacity-40"
-                    : "bg-slate-700 hover:bg-slate-600 shadow-slate-900/50",
+                  : callState === "speaking"
+                    ? "bg-orange-600 hover:bg-orange-500 shadow-orange-900/50 ring-4 ring-orange-500/25"
+                    : callState !== "ready"
+                      ? "bg-slate-700 cursor-not-allowed opacity-40"
+                      : "bg-slate-700 hover:bg-slate-600 shadow-slate-900/50",
               )}
               onClick={toggleMic}
-              disabled={callState !== "ready" && callState !== "listening"}
+              disabled={callState !== "ready" && callState !== "listening" && callState !== "speaking"}
             >
               {isListening
                 ? <MicOff className="w-7 h-7 text-white" />
@@ -644,7 +649,7 @@ export default function VoiceConversation() {
               }
             </button>
             <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-              {isListening ? "Done" : "Speak"}
+              {isListening ? "Done" : isSpeaking ? "Interrupt" : "Speak"}
             </span>
           </div>
 
