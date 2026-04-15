@@ -21,10 +21,13 @@ export class BooksController {
 
   @Post()
   @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'pdf', maxCount: 1 },
-      { name: 'cover', maxCount: 1 },
-    ]),
+    FileFieldsInterceptor(
+      [
+        { name: 'pdf', maxCount: 1 },
+        { name: 'cover', maxCount: 1 },
+      ],
+      { limits: { fileSize: 50 * 1024 * 1024 } }, // 50MB per file
+    ),
   )
   async uploadBook(
     @Headers('x-user-id') userId: string,
