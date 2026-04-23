@@ -185,7 +185,7 @@ export default function VoiceConversation() {
   const [messages, setMessages]             = useState<Message[]>([]);
   const [duration, setDuration]             = useState(0);
   const [micLevels, setMicLevels]           = useState<number[]>(Array(18).fill(0));
-  const [transcriptOpen, setTranscriptOpen] = useState(true);
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
 
   const socketRef           = useRef<Socket | null>(null);
   const playCtxRef          = useRef<AudioContext | null>(null);
@@ -597,7 +597,7 @@ export default function VoiceConversation() {
       {/* ── Transcript panel ─────────────────────────────────────── */}
       {isCallActive && (
         <div className={cn(
-          "flex-shrink-0 border-t border-slate-800/60 bg-slate-900/70 backdrop-blur-sm transition-all duration-300",
+          "flex-shrink-1 border-t border-slate-800/60 bg-slate-900/70 backdrop-blur-sm transition-all duration-300",
           transcriptOpen ? "h-96" : "h-10",
         )}>
           <button
