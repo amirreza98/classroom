@@ -164,22 +164,7 @@ function MessageBubble({ msg }: { msg: Message }) {
             ? "bg-slate-700 text-slate-100 rounded-tr-sm"
             : "bg-slate-800 border border-slate-700 text-slate-100 rounded-tl-sm",
         )}>
-          {msg.pending && msg.text === "" ? (
-            <TypingDots />
-          ) : (
-            <>
-              {msg.text}
-              {msg.pending && (
-                <>
-                  <style>{`@keyframes cursor-blink{0%,100%{opacity:1}50%{opacity:0}}`}</style>
-                  <span
-                    className="inline-block w-px h-3.5 bg-slate-400 ml-0.5 align-middle"
-                    style={{ animation: "cursor-blink 0.7s step-end infinite" }}
-                  />
-                </>
-              )}
-            </>
-          )}
+          {msg.pending && msg.text === "" ? <TypingDots /> : msg.text}
         </div>
         <span className={cn("text-[10px] text-slate-500", isUser ? "text-right" : "text-left")}>
           {msg.ts.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -214,11 +199,12 @@ export default function VoiceConversation() {
   const streamingAiMsgIdRef = useRef<string | null>(null);
   const transcriptScrollRef = useRef<HTMLDivElement>(null);
 
-  const aiTextBufferRef        = useRef<string>("");
-  const typewriterIntervalRef  = useRef<ReturnType<typeof setInterval> | null>(null);
-  const typewriterMsgIdRef     = useRef<string | null>(null);
-  const typewriterFinalizeRef  = useRef(false);
-  const typewriterFinalTextRef = useRef<string>("");
+  // ── Text-audio sync refs ──────────────────────────────────────────────
+  const fullTextBufferRef    = useRef("");          // all text received from deltas
+  const totalAudioSamplesRef = useRef(0);           // cumulative audio samples queued
+  const playStartCtxTimeRef  = useRef<number | null>(null); // ctx.currentTime when playback began
+  const revealLoopRef        = useRef<number | null>(null); // rAF id for char-reveal loop
+  const prevCharsRevealedRef = useRef(0);           // last char count rendered (avoids redundant setState)
 
   const micActiveRef = useRef(false);
   const micNodeRefs  = useRef<{
@@ -252,7 +238,6 @@ export default function VoiceConversation() {
       cleanupMic();
       socketRef.current?.disconnect();
       if (durationRef.current) clearInterval(durationRef.current);
-      if (typewriterIntervalRef.current) clearInterval(typewriterIntervalRef.current);
     };
   }, []);
 
@@ -273,6 +258,28 @@ export default function VoiceConversation() {
     setMicLevels(Array(18).fill(0));
   }, []);
 
+  // ── Stop character-reveal loop ────────────────────────────────────────
+  // snapToFull=true: finish showing all buffered text (natural end)
+  // snapToFull=false: freeze text where it is (interrupt)
+  const stopRevealLoop = useCallback((snapToFull: boolean) => {
+    if (revealLoopRef.current !== null) {
+      cancelAnimationFrame(revealLoopRef.current);
+      revealLoopRef.current = null;
+    }
+    if (snapToFull && streamingAiMsgIdRef.current) {
+      const msgId    = streamingAiMsgIdRef.current;
+      const fullText = fullTextBufferRef.current;
+      setMessages(prev => prev.map(m =>
+        m.id === msgId ? { ...m, text: fullText, pending: false } : m
+      ));
+      streamingAiMsgIdRef.current = null;
+    }
+    totalAudioSamplesRef.current = 0;
+    playStartCtxTimeRef.current  = null;
+    fullTextBufferRef.current    = "";
+    prevCharsRevealedRef.current = 0;
+  }, []);
+
   // ── Stop AI audio immediately ─────────────────────────────────────────
   const stopAiAudio = useCallback(() => {
     audioQueueRef.current = [];
@@ -281,55 +288,37 @@ export default function VoiceConversation() {
       try { activeSourceRef.current.stop(); } catch (_) {}
       activeSourceRef.current = null;
     }
-  }, []);
-
-  // ── Typewriter helpers ────────────────────────────────────────────────
-  const stopTypewriter = useCallback(() => {
-    if (typewriterIntervalRef.current) {
-      clearInterval(typewriterIntervalRef.current);
-      typewriterIntervalRef.current = null;
-    }
-    aiTextBufferRef.current       = "";
-    typewriterMsgIdRef.current    = null;
-    typewriterFinalizeRef.current = false;
-    typewriterFinalTextRef.current = "";
-  }, []);
-
-  const ensureTypewriter = useCallback(() => {
-    if (typewriterIntervalRef.current) return;
-    typewriterIntervalRef.current = setInterval(() => {
-      if (aiTextBufferRef.current.length > 0) {
-        const char = aiTextBufferRef.current[0];
-        aiTextBufferRef.current = aiTextBufferRef.current.slice(1);
-        const id = typewriterMsgIdRef.current;
-        if (id) {
-          setMessages(prev => prev.map(m => m.id === id ? { ...m, text: m.text + char } : m));
-        }
-      } else if (typewriterFinalizeRef.current) {
-        clearInterval(typewriterIntervalRef.current!);
-        typewriterIntervalRef.current  = null;
-        typewriterFinalizeRef.current  = false;
-        const id       = typewriterMsgIdRef.current;
-        const finalTxt = typewriterFinalTextRef.current;
-        if (id) {
-          setMessages(prev =>
-            prev.map(m => m.id === id ? { ...m, text: finalTxt || m.text, pending: false } : m)
-          );
-          if (streamingAiMsgIdRef.current === id) streamingAiMsgIdRef.current = null;
-        }
-        typewriterMsgIdRef.current     = null;
-        typewriterFinalTextRef.current = "";
-        setTimeout(() => {
-          setCallState(prev => prev === "processing" ? "ready" : prev);
-        }, 300);
-      }
-    }, 35);
-  }, []);
+    stopRevealLoop(false);
+  }, [stopRevealLoop]);
 
   // ── Audio playback ────────────────────────────────────────────────────
   const playAudioQueue = useCallback(async (ctx: AudioContext) => {
     if (isPlayingRef.current || audioQueueRef.current.length === 0) return;
     isPlayingRef.current = true;
+
+    // Start the char-reveal loop once per response (tied to audio progress)
+    if (playStartCtxTimeRef.current === null) {
+      playStartCtxTimeRef.current = ctx.currentTime;
+      const loop = () => {
+        const startTime = playStartCtxTimeRef.current;
+        if (startTime === null) return;
+        const elapsed     = ctx.currentTime - startTime;
+        const totalSecs   = totalAudioSamplesRef.current / (24000 * 1.5);
+        const fraction    = totalSecs > 0 ? Math.min(1, elapsed / totalSecs) : 0;
+        const fullText    = fullTextBufferRef.current;
+        const charsToShow = Math.ceil(fraction * fullText.length);
+        if (charsToShow !== prevCharsRevealedRef.current && streamingAiMsgIdRef.current) {
+          prevCharsRevealedRef.current = charsToShow;
+          const msgId = streamingAiMsgIdRef.current;
+          setMessages(prev => prev.map(m =>
+            m.id === msgId ? { ...m, text: fullText.slice(0, charsToShow) } : m
+          ));
+        }
+        revealLoopRef.current = requestAnimationFrame(loop);
+      };
+      revealLoopRef.current = requestAnimationFrame(loop);
+    }
+
     setCallState("speaking");
 
     while (audioQueueRef.current.length > 0) {
@@ -340,7 +329,7 @@ export default function VoiceConversation() {
       const source = ctx.createBufferSource();
       activeSourceRef.current = source;
       source.buffer = buffer;
-      source.playbackRate.value = 1.5; 
+      source.playbackRate.value = 1.5;
       source.connect(ctx.destination);
 
       await new Promise<void>(resolve => {
@@ -350,8 +339,9 @@ export default function VoiceConversation() {
     }
 
     isPlayingRef.current = false;
+    stopRevealLoop(true);  // snap remaining text to full on natural completion
     setCallState("ready");
-  }, []);
+  }, [stopRevealLoop]);
 
   const playAudioChunk = useCallback(async (base64Audio: string) => {
     try {
@@ -367,6 +357,7 @@ export default function VoiceConversation() {
       const f32 = new Float32Array(pcm.length);
       for (let i = 0; i < pcm.length; i++) f32[i] = pcm[i] / 32768;
 
+      totalAudioSamplesRef.current += f32.length;
       audioQueueRef.current.push(f32);
       playAudioQueue(ctx);
     } catch (e) {
@@ -410,41 +401,35 @@ export default function VoiceConversation() {
       }
 
       if (event.type === "response.audio_transcript.delta" && event.delta) {
-        aiTextBufferRef.current += event.delta;
-        if (!streamingAiMsgIdRef.current) {
+        // Buffer text — the reveal loop drip-feeds it in sync with audio playback
+        fullTextBufferRef.current += event.delta;
+        setMessages(prev => {
+          if (streamingAiMsgIdRef.current) return prev; // bubble already exists
           const newId = uid();
           streamingAiMsgIdRef.current = newId;
-          typewriterMsgIdRef.current  = newId;
-          setMessages(prev => [...prev, { id: newId, role: "assistant", text: "", ts: new Date(), pending: true }]);
-        }
-        ensureTypewriter();
+          return [...prev, { id: newId, role: "assistant", text: "", ts: new Date(), pending: true }];
+        });
       }
 
       if (event.type === "response.audio_transcript.done") {
-        if (typewriterIntervalRef.current) {
-          // Typewriter still draining — signal it to finalize when buffer empties
-          typewriterFinalTextRef.current = event.transcript;
-          typewriterFinalizeRef.current  = true;
-        } else if (streamingAiMsgIdRef.current) {
-          // Typewriter already done — finalize immediately
-          setMessages(prev =>
-            prev.map(m =>
-              m.id === streamingAiMsgIdRef.current
-                ? { ...m, text: event.transcript, pending: false }
-                : m
-            )
-          );
-          streamingAiMsgIdRef.current = null;
-          typewriterMsgIdRef.current  = null;
-          setTimeout(() => {
-            setCallState(prev => prev === "processing" ? "ready" : prev);
-          }, 300);
-        } else {
-          setMessages(prev => [...prev, { id: uid(), role: "assistant", text: event.transcript, ts: new Date() }]);
-          setTimeout(() => {
-            setCallState(prev => prev === "processing" ? "ready" : prev);
-          }, 300);
+        // Ensure buffer holds the authoritative final text
+        fullTextBufferRef.current = event.transcript;
+        // If the reveal loop is already stopped (audio finished before this event),
+        // finalise the bubble immediately; otherwise the loop handles it at audio end.
+        if (revealLoopRef.current === null) {
+          if (streamingAiMsgIdRef.current) {
+            const msgId = streamingAiMsgIdRef.current;
+            setMessages(prev =>
+              prev.map(m => m.id === msgId ? { ...m, text: event.transcript, pending: false } : m)
+            );
+            streamingAiMsgIdRef.current = null;
+          } else {
+            setMessages(prev => [...prev, { id: uid(), role: "assistant", text: event.transcript, ts: new Date() }]);
+          }
         }
+        setTimeout(() => {
+          setCallState(prev => prev === "processing" ? "ready" : prev);
+        }, 300);
       }
 
       if (event.type === "response.audio.delta" && event.delta) {
@@ -462,29 +447,24 @@ export default function VoiceConversation() {
           );
           pendingUserMsgIdRef.current = null;
         }
-        if (streamingAiMsgIdRef.current) {
-          setMessages(prev =>
-            prev.map(m =>
-              m.id === streamingAiMsgIdRef.current ? { ...m, pending: false } : m
-            )
-          );
-          streamingAiMsgIdRef.current = null;
+        // AI bubble finalization is handled by stopRevealLoop(true) when audio ends.
+        // Fallback: if audio never started (edge case), unblock the state.
+        if (!isPlayingRef.current) {
+          setTimeout(() => {
+            setCallState(prev =>
+              prev === "processing" || prev === "speaking" ? "ready" : prev
+            );
+          }, 500);
         }
-        setTimeout(() => {
-          setCallState(prev =>
-            prev === "processing" || prev === "speaking" ? "ready" : prev
-          );
-        }, 500);
       }
     });
 
     socket.on("disconnect", () => {
       setCallState("idle");
     });
-  }, [session, bookId, playAudioChunk, ensureTypewriter]);
+  }, [session, bookId, playAudioChunk]);
 
   const endSession = useCallback(() => {
-    stopTypewriter();
     stopAiAudio();
     if (playCtxRef.current) {
       playCtxRef.current.close().catch(() => {});
@@ -498,7 +478,7 @@ export default function VoiceConversation() {
     streamingAiMsgIdRef.current = null;
     pendingUserMsgIdRef.current = null;
     navigate("/voice");
-  }, [sessionId, cleanupMic, stopAiAudio, stopTypewriter, navigate]);
+  }, [sessionId, cleanupMic, stopAiAudio, navigate]);
 
   // ── Mic toggle ────────────────────────────────────────────────────────
   const toggleMic = useCallback(async () => {
@@ -509,7 +489,6 @@ export default function VoiceConversation() {
     if (state === "speaking") {
       socketRef.current?.emit("cancel-ai-response");
       stopAiAudio();
-      stopTypewriter();
       // Dismiss any streaming AI bubble that was cut off mid-sentence
       if (streamingAiMsgIdRef.current) {
         setMessages(prev =>
