@@ -274,6 +274,7 @@ export default function VoiceConversation() {
       const source = ctx.createBufferSource();
       activeSourceRef.current = source;
       source.buffer = buffer;
+      source.playbackRate.value = 1.5; 
       source.connect(ctx.destination);
 
       await new Promise<void>(resolve => {
