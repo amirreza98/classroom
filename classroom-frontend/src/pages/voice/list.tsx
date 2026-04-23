@@ -67,6 +67,18 @@ export default function VoiceList() {
     fetchBooks();
   }, [session]);
 
+  useEffect(() => {
+    const hasUnprocessed = books.some(book => !book.isProcessed);
+
+    if (!hasUnprocessed) return;
+
+    const interval = setInterval(() => {
+      fetchBooks();
+    }, 3000); // poll every 3 seconds
+
+    return () => clearInterval(interval);
+  }, [books]);
+
   const handleUpload = async () => {
     if (!pdfFile || !form.title || !form.author || !session?.user) return;
     setUploading(true);
