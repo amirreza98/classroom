@@ -164,7 +164,22 @@ function MessageBubble({ msg }: { msg: Message }) {
             ? "bg-slate-700 text-slate-100 rounded-tr-sm"
             : "bg-slate-800 border border-slate-700 text-slate-100 rounded-tl-sm",
         )}>
-          {msg.pending && msg.text === "" ? <TypingDots /> : msg.text}
+          {msg.pending && msg.text === "" ? (
+            <TypingDots />
+          ) : (
+            <>
+              {msg.text}
+              {msg.pending && (
+                <>
+                  <style>{`@keyframes cursor-blink{0%,100%{opacity:1}50%{opacity:0}}`}</style>
+                  <span
+                    className="inline-block w-px h-3.5 bg-slate-400 ml-0.5 align-middle"
+                    style={{ animation: "cursor-blink 0.7s step-end infinite" }}
+                  />
+                </>
+              )}
+            </>
+          )}
         </div>
         <span className={cn("text-[10px] text-slate-500", isUser ? "text-right" : "text-left")}>
           {msg.ts.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -197,6 +212,13 @@ export default function VoiceConversation() {
   const callStateRef        = useRef<CallState>("idle");
   const pendingUserMsgIdRef = useRef<string | null>(null);
   const streamingAiMsgIdRef = useRef<string | null>(null);
+  const transcriptScrollRef = useRef<HTMLDivElement>(null);
+
+  const aiTextBufferRef        = useRef<string>("");
+  const typewriterIntervalRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+  const typewriterMsgIdRef     = useRef<string | null>(null);
+  const typewriterFinalizeRef  = useRef(false);
+  const typewriterFinalTextRef = useRef<string>("");
 
   const micActiveRef = useRef(false);
   const micNodeRefs  = useRef<{
@@ -230,6 +252,7 @@ export default function VoiceConversation() {
       cleanupMic();
       socketRef.current?.disconnect();
       if (durationRef.current) clearInterval(durationRef.current);
+      if (typewriterIntervalRef.current) clearInterval(typewriterIntervalRef.current);
     };
   }, []);
 
@@ -258,6 +281,49 @@ export default function VoiceConversation() {
       try { activeSourceRef.current.stop(); } catch (_) {}
       activeSourceRef.current = null;
     }
+  }, []);
+
+  // ── Typewriter helpers ────────────────────────────────────────────────
+  const stopTypewriter = useCallback(() => {
+    if (typewriterIntervalRef.current) {
+      clearInterval(typewriterIntervalRef.current);
+      typewriterIntervalRef.current = null;
+    }
+    aiTextBufferRef.current       = "";
+    typewriterMsgIdRef.current    = null;
+    typewriterFinalizeRef.current = false;
+    typewriterFinalTextRef.current = "";
+  }, []);
+
+  const ensureTypewriter = useCallback(() => {
+    if (typewriterIntervalRef.current) return;
+    typewriterIntervalRef.current = setInterval(() => {
+      if (aiTextBufferRef.current.length > 0) {
+        const char = aiTextBufferRef.current[0];
+        aiTextBufferRef.current = aiTextBufferRef.current.slice(1);
+        const id = typewriterMsgIdRef.current;
+        if (id) {
+          setMessages(prev => prev.map(m => m.id === id ? { ...m, text: m.text + char } : m));
+        }
+      } else if (typewriterFinalizeRef.current) {
+        clearInterval(typewriterIntervalRef.current!);
+        typewriterIntervalRef.current  = null;
+        typewriterFinalizeRef.current  = false;
+        const id       = typewriterMsgIdRef.current;
+        const finalTxt = typewriterFinalTextRef.current;
+        if (id) {
+          setMessages(prev =>
+            prev.map(m => m.id === id ? { ...m, text: finalTxt || m.text, pending: false } : m)
+          );
+          if (streamingAiMsgIdRef.current === id) streamingAiMsgIdRef.current = null;
+        }
+        typewriterMsgIdRef.current     = null;
+        typewriterFinalTextRef.current = "";
+        setTimeout(() => {
+          setCallState(prev => prev === "processing" ? "ready" : prev);
+        }, 300);
+      }
+    }, 35);
   }, []);
 
   // ── Audio playback ────────────────────────────────────────────────────
@@ -344,22 +410,23 @@ export default function VoiceConversation() {
       }
 
       if (event.type === "response.audio_transcript.delta" && event.delta) {
-        setMessages(prev => {
-          if (streamingAiMsgIdRef.current) {
-            return prev.map(m =>
-              m.id === streamingAiMsgIdRef.current
-                ? { ...m, text: m.text + event.delta }
-                : m
-            );
-          }
+        aiTextBufferRef.current += event.delta;
+        if (!streamingAiMsgIdRef.current) {
           const newId = uid();
           streamingAiMsgIdRef.current = newId;
-          return [...prev, { id: newId, role: "assistant", text: event.delta, ts: new Date(), pending: true }];
-        });
+          typewriterMsgIdRef.current  = newId;
+          setMessages(prev => [...prev, { id: newId, role: "assistant", text: "", ts: new Date(), pending: true }]);
+        }
+        ensureTypewriter();
       }
 
       if (event.type === "response.audio_transcript.done") {
-        if (streamingAiMsgIdRef.current) {
+        if (typewriterIntervalRef.current) {
+          // Typewriter still draining — signal it to finalize when buffer empties
+          typewriterFinalTextRef.current = event.transcript;
+          typewriterFinalizeRef.current  = true;
+        } else if (streamingAiMsgIdRef.current) {
+          // Typewriter already done — finalize immediately
           setMessages(prev =>
             prev.map(m =>
               m.id === streamingAiMsgIdRef.current
@@ -368,12 +435,16 @@ export default function VoiceConversation() {
             )
           );
           streamingAiMsgIdRef.current = null;
+          typewriterMsgIdRef.current  = null;
+          setTimeout(() => {
+            setCallState(prev => prev === "processing" ? "ready" : prev);
+          }, 300);
         } else {
           setMessages(prev => [...prev, { id: uid(), role: "assistant", text: event.transcript, ts: new Date() }]);
+          setTimeout(() => {
+            setCallState(prev => prev === "processing" ? "ready" : prev);
+          }, 300);
         }
-        setTimeout(() => {
-          setCallState(prev => prev === "processing" ? "ready" : prev);
-        }, 300);
       }
 
       if (event.type === "response.audio.delta" && event.delta) {
@@ -410,9 +481,10 @@ export default function VoiceConversation() {
     socket.on("disconnect", () => {
       setCallState("idle");
     });
-  }, [session, bookId, playAudioChunk]);
+  }, [session, bookId, playAudioChunk, ensureTypewriter]);
 
   const endSession = useCallback(() => {
+    stopTypewriter();
     stopAiAudio();
     if (playCtxRef.current) {
       playCtxRef.current.close().catch(() => {});
@@ -426,7 +498,7 @@ export default function VoiceConversation() {
     streamingAiMsgIdRef.current = null;
     pendingUserMsgIdRef.current = null;
     navigate("/voice");
-  }, [sessionId, cleanupMic, stopAiAudio, navigate]);
+  }, [sessionId, cleanupMic, stopAiAudio, stopTypewriter, navigate]);
 
   // ── Mic toggle ────────────────────────────────────────────────────────
   const toggleMic = useCallback(async () => {
@@ -437,6 +509,7 @@ export default function VoiceConversation() {
     if (state === "speaking") {
       socketRef.current?.emit("cancel-ai-response");
       stopAiAudio();
+      stopTypewriter();
       // Dismiss any streaming AI bubble that was cut off mid-sentence
       if (streamingAiMsgIdRef.current) {
         setMessages(prev =>
@@ -605,7 +678,10 @@ export default function VoiceConversation() {
             className="w-full flex items-center justify-between px-4 h-10 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors"
             onClick={() => {
               setTranscriptOpen(o => {
-                if (!o) setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 250);
+                if (!o) setTimeout(() => {
+                    const el = transcriptScrollRef.current?.querySelector("[data-radix-scroll-area-viewport]");
+                    if (el) el.scrollTop = el.scrollHeight;
+                }, 250);
                 return !o;
               });
             }}
@@ -615,7 +691,7 @@ export default function VoiceConversation() {
           </button>
 
           {transcriptOpen && (
-            <ScrollArea className="h-[calc(100%-40px)]">
+            <ScrollArea ref={transcriptScrollRef} className="h-[calc(100%-40px)]">
               <div className="flex flex-col gap-3 py-2 pb-3">
                 {messages.length === 0 ? (
                   <p className="text-center text-xs text-slate-600 py-6">
