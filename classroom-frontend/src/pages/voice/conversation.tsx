@@ -602,7 +602,12 @@ export default function VoiceConversation() {
         )}>
           <button
             className="w-full flex items-center justify-between px-4 h-10 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors"
-            onClick={() => setTranscriptOpen(o => !o)}
+            onClick={() => {
+              setTranscriptOpen(o => {
+                if (!o) setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 250);
+                return !o;
+              });
+            }}
           >
             <span>Transcript{messages.length > 0 ? ` (${messages.length})` : ""}</span>
             {transcriptOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
