@@ -13,6 +13,7 @@ import enrollmentsRouter from './routes/enrollments.js';
 import dashboardRouter from './routes/dashboard.js';
 import securityMiddleware from './middleware/security.js';
 import { auth } from './lib/auth.js';
+import {producer} from "./kafka.js"
 
 const app = express();
 const PORT = 8000;
@@ -47,4 +48,14 @@ app.get('/', (req, res) => {
     res.send('Hello, welcome to the Classroom');
 });
 
-app.listen(PORT, () => { console.log(`Server is running at http://localhost:${PORT}`); });
+producer.connect()
+  .then(() => {
+    console.log('Kafka producer connected');
+    app.listen(PORT, () => {
+      console.log(`Server is running at http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('Failed to connect Kafka producer:', err);
+    process.exit(1);
+  });
