@@ -5,6 +5,14 @@ spring:
   application:
     name: gateway-service
 
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Better Auth exposes its public keys at /api/auth/jwks (ES256)
+          # Set JWK_SET_URI=http://backend:8000/api/auth/jwks in docker-compose
+          jwk-set-uri: ${JWK_SET_URI:http://localhost:8000/api/auth/jwks}
+
   cloud:
     gateway:
       routes:

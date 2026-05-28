@@ -4,6 +4,7 @@ import { and, desc, eq, getTableColumns, ilike, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { classes, departments, subjects } from '../db/schema/app.js';
 import { user } from '../db/schema/auth.js';
+import { producer } from '../kafka.js'
 
 const router = express.Router();
 
@@ -110,6 +111,24 @@ router.post('/', async (req, res) => {
         if (!createdClass) throw Error;
 
         res.status(201).json({ data: createdClass });
+
+        // fire and forget — don't let Kafka failure affect the response
+        try {
+            await producer.send({
+                topic: 'student.actions',
+                messages: [{
+                    value: JSON.stringify({
+                        event: 'class.created',
+                        classId: createdClass.id,
+                        timestamp: new Date().toISOString()
+                    })
+                }]
+            });
+            console.log('Event published: class.created');
+        } catch (kafkaError) {
+            console.error('Kafka publish failed:', kafkaError);
+        }
+
     } catch (e) {
         console.error(`POST /classes error ${e}`);
         res.status(500).json({ error: e });

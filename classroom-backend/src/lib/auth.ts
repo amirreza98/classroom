@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { jwt } from "better-auth/plugins";
 import { db } from "../db/index.js";
 import * as schema from '../db/schema/auth.js'
 
@@ -35,5 +36,21 @@ export const auth = betterAuth({
                 type: 'string', required: false, input: true,
             },
         }
-    }
+    },
+    plugins: [
+        jwt({
+            jwt: {
+                expirationTime: "1h",
+                // Include role and email as claims so the gateway can inject them as headers
+                definePayload: async ({ user }) => ({
+                    role: (user as any).role ?? 'student',
+                    email: user.email,
+                    name: user.name,
+                }),
+            },
+            jwks: {
+                keyPairConfig: { alg: "ES256" },
+            },
+        }),
+    ],
 });

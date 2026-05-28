@@ -1,0 +1,23 @@
+server:
+  port: ${SERVER_PORT:8081}
+
+spring:
+  application:
+    name: analytics-service
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKER:localhost:9092}
+    consumer:
+      group-id: analytics-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
