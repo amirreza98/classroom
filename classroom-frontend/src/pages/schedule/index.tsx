@@ -32,7 +32,7 @@ export default function SchedulePage() {
             setError(null);
             try {
                 const enrollRes = await fetch(
-                    `${BASE_URL}/api/enrollments?studentId=${session.user.id}`,
+                    `${BASE_URL}/enrollments?studentId=${session.user.id}`,
                     { credentials: "include" }
                 );
                 if (!enrollRes.ok) throw new Error("Failed to fetch enrollments");
