@@ -10,21 +10,24 @@ const router = express.Router();
 // GET /enrollments?classId=X - get enrollments for a class with enrolled student info
 router.get("/", async (req, res) => {
     try {
-        const { classId, page = 1, limit = 50 } = req.query;
+        const { classId, studentId, page = 1, limit = 50 } = req.query;
 
-        if (!classId) return res.status(400).json({ error: 'classId query parameter is required' });
-
-        const classIdNum = Number(classId);
-        if (!Number.isFinite(classIdNum)) return res.status(400).json({ error: 'Invalid classId' });
+        if (!classId && !studentId) return res.status(400).json({ error: 'classId or studentId query parameter is required' });
 
         const currentPage = Math.max(1, Number.isFinite(+page) ? +page : 1);
         const limitPerPage = Math.min(Math.max(1, Number.isFinite(+limit) ? +limit : 50), 100);
         const offset = (currentPage - 1) * limitPerPage;
 
+        const whereClause = classId && studentId
+            ? and(eq(enrollments.classId, Number(classId)), eq(enrollments.studentId, String(studentId)))
+            : classId
+            ? eq(enrollments.classId, Number(classId))
+            : eq(enrollments.studentId, String(studentId));
+
         const countResult = await db
             .select({ count: sql<number>`count(*)` })
             .from(enrollments)
-            .where(eq(enrollments.classId, classIdNum));
+            .where(whereClause);
 
         const totalCount = Number(countResult[0]?.count ?? 0);
 
@@ -41,7 +44,7 @@ router.get("/", async (req, res) => {
             })
             .from(enrollments)
             .leftJoin(user, eq(enrollments.studentId, user.id))
-            .where(eq(enrollments.classId, classIdNum))
+            .where(whereClause)
             .orderBy(desc(enrollments.createdAt))
             .limit(limitPerPage)
             .offset(offset);

@@ -42,7 +42,7 @@ export default function SchedulePage() {
                 const classResults = await Promise.all(
                     enrollments.map(async (enrollment) => {
                         const classRes = await fetch(
-                            `${BASE_URL}/api/classes/${enrollment.classId}`,
+                            `${BASE_URL}classes/${enrollment.classId}`,
                             { credentials: "include" }
                         );
                         if (!classRes.ok) return null;
