@@ -149,7 +149,7 @@ export default function SchedulePage() {
                                 <Button
                                     className="w-full"
                                     disabled={cls.status !== "active"}
-                                    onClick={() => navigate(`/classes/${cls.id}/collaborate`)}
+                                    onClick={() => navigate(`/schedule/class/${cls.id}`)}
                                 >
                                     Join Class
                                 </Button>

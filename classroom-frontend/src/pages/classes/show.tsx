@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useShow, useList, useCreate, useDelete, useInvalidate, useNotification } from "@refinedev/core";
-import { useNavigate } from 'react-router';
 import { ClassDetails, Enrollment, User } from "@/types";
 import { ShowView, ShowViewHeader } from '@/components/refine-ui/views/show-view';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,15 +10,9 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AdvancedImage } from "@cloudinary/react";
 import { bannerPhoto } from '@/lib/cloudinary';
-import { useSession } from '@/lib/auth-client';
-import { Users, AlertTriangle, Trash2, UserPlus, Copy, Check, Search, Pencil } from 'lucide-react';
+import { Users, AlertTriangle, Trash2, UserPlus, Copy, Check, Search } from 'lucide-react';
 
 const Show = () => {
-  const navigate = useNavigate();
-  const { data: session } = useSession();
-  const userRole = (session?.user as any)?.role;
-  const canCollaborate = userRole === 'teacher' || userRole === 'admin';
-
   const { query } = useShow<ClassDetails>({ resource: 'classes' });
   const classDetails = query.data?.data;
   const { isLoading, isError } = query;
@@ -155,12 +148,6 @@ const Show = () => {
             {isNearFull && !isFull && <Badge variant="outline" className="border-orange-500 text-orange-500"><AlertTriangle className="h-3 w-3 mr-1" />Near Full</Badge>}
             {isFull && <Badge variant="destructive">Full</Badge>}
             <Badge variant={status === 'active' ? 'default' : 'secondary'} data-status={status}>{status.toUpperCase()}</Badge>
-            {canCollaborate && (
-              <Button variant="outline" size="sm" onClick={() => navigate(`/classes/${classDetails.id}/collaborate`)} className="flex items-center gap-2">
-                <Pencil className="h-4 w-4" />
-                Open Collaboration
-              </Button>
-            )}
           </div>
         </div>
 

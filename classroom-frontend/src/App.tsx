@@ -23,7 +23,7 @@ import ClassesList from "@/pages/classes/list";
 import ClassesCreate from "@/pages/classes/create";
 import ClassesShow from "@/pages/classes/show";
 import ClassesEdit from "@/pages/classes/edit";
-import CollaboratePage from "@/pages/classes/collaborate";
+import CollaboratePage from "@/pages/schedule/collaborate";
 
 import UsersList from "@/pages/users/list";
 import UsersCreate from "@/pages/users/create";
@@ -120,12 +120,11 @@ function App() {
 
                 <Route element={<AuthGuard><Layout><Outlet /></Layout></AuthGuard>}>
                   
-                  {/* Student only */}
-                  <Route element={<RoleGuard allowedRoles={['student']} />}>
-                    <Route path="schedule" element={<SchedulePage />} />
-                  </Route>
-
                   {/* Everyone */}
+                  <Route path="schedule">
+                    <Route index element={<SchedulePage />} />
+                    <Route path="class/:classId" element={<CollaboratePage />} />
+                  </Route>
                   <Route path="voice">
                     <Route index element={<VoiceList />} />
                     <Route path=":bookId" element={<VoiceConversation />} />
@@ -134,9 +133,6 @@ function App() {
                     <Route index element={<SubjectsList />} />
                     <Route path="show/:id" element={<SubjectsShow />} />
                   </Route>
-
-                  {/* Everyone - Collaboration */}
-                  <Route path="classes/:classId/collaborate" element={<CollaboratePage />} />
 
                   {/* Teacher + Admin */}
                   <Route element={<RoleGuard allowedRoles={['teacher', 'admin']} />}>
