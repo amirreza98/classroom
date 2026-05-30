@@ -107,6 +107,21 @@ services:
     networks:
       - classroom-network
 
+  collaboration-service:
+    build: ./collaboration-service
+    container_name: collaboration-service
+    ports:
+      - "8083:8083"
+    environment:
+      SERVER_PORT: 8083
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      DATABASE_URL: ${COLLABORATION_DATABASE_URL}
+    depends_on:
+      - redis
+    networks:
+      - classroom-network
+
 networks:
   classroom-network:
     driver: bridge
