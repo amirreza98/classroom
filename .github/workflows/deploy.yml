@@ -8,6 +8,9 @@ on:
 jobs:
   build-and-push-backend:
     runs-on: ubuntu-latest
+    if: |
+      contains(github.event.head_commit.modified, 'classroom-backend/') ||
+      contains(github.event.head_commit.added, 'classroom-backend/')
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -27,6 +30,9 @@ jobs:
 
   build-and-push-frontend:
     runs-on: ubuntu-latest
+    if: |
+      contains(github.event.head_commit.modified, 'classroom-frontend/') ||
+      contains(github.event.head_commit.added, 'classroom-frontend/')
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -46,6 +52,9 @@ jobs:
 
   build-and-push-gateway:
     runs-on: ubuntu-latest
+    if: |
+      contains(github.event.head_commit.modified, 'gateway-service/') ||
+      contains(github.event.head_commit.added, 'gateway-service/')
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -76,6 +85,9 @@ jobs:
 
   build-and-push-voice-service:
     runs-on: ubuntu-latest
+    if: |
+      contains(github.event.head_commit.modified, 'voice-service/') ||
+      contains(github.event.head_commit.added, 'voice-service/')
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -95,6 +107,9 @@ jobs:
 
   build-and-push-analytics-service:
     runs-on: ubuntu-latest
+    if: |
+      contains(github.event.head_commit.modified, 'analytics-service/') ||
+      contains(github.event.head_commit.added, 'analytics-service/')
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -125,6 +140,9 @@ jobs:
 
   build-and-push-notifications-service:
     runs-on: ubuntu-latest
+    if: |
+      contains(github.event.head_commit.modified, 'notifications-service/') ||
+      contains(github.event.head_commit.added, 'notifications-service/')
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -155,6 +173,9 @@ jobs:
 
   build-and-push-collaboration-service:
     runs-on: ubuntu-latest
+    if: |
+      contains(github.event.head_commit.modified, 'collaboration-service/') ||
+      contains(github.event.head_commit.added, 'collaboration-service/')
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -193,6 +214,7 @@ jobs:
       - build-and-push-analytics-service
       - build-and-push-notifications-service
       - build-and-push-collaboration-service
+    if: always()
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
