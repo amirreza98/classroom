@@ -60,6 +60,7 @@ export default function CollaboratePage() {
 
     const handleCreateFile = async () => {
         const name = newFileName.trim();
+        console.log('Creating file:', { name, createdBy: session?.user?.id });
         if (!name || !classId) return;
         setIsCreating(true);
         try {
@@ -67,7 +68,10 @@ export default function CollaboratePage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify({ name }),
+                body: JSON.stringify({ 
+                    name, 
+                    createdBy: session?.user?.id 
+                }),
             });
             if (res.ok) {
                 const json = await res.json();
