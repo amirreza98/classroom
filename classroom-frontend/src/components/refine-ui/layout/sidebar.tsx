@@ -42,8 +42,8 @@ export function Sidebar() {
   // Define which routes each role can see
   const roleRoutes: Record<string, string[]> = {
     student: ['subjects', 'voice', 'schedule'],
-    teacher: ['dashboard', 'voice', 'classes', 'subjects', 'departments'],
-    admin: ['dashboard', 'voice', 'classes', 'subjects', 'departments', 'users'],
+    teacher: ['dashboard', 'voice', 'classes', 'subjects', 'departments', 'schedule'],
+    admin: ['dashboard', 'voice', 'classes', 'subjects', 'departments', 'users', 'schedule'],
   };
 
   const allowedRoutes = roleRoutes[role] ?? [];

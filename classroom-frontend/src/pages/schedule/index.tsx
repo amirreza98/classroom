@@ -12,7 +12,7 @@ import type { ClassDetails, Enrollment } from "@/types";
 
 const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL as string;
 
-type EnrolledClass = ClassDetails & { enrollmentId: number };
+type ScheduleClass = ClassDetails & { enrollmentId?: number };
 
 const statusVariant = (status: ClassDetails["status"]) =>
     status === "active" ? "default" : "secondary";
@@ -20,7 +20,8 @@ const statusVariant = (status: ClassDetails["status"]) =>
 export default function SchedulePage() {
     const { data: session } = useSession();
     const navigate = useNavigate();
-    const [classes, setClasses] = useState<EnrolledClass[]>([]);
+    const userRole = (session?.user as any)?.role as string | undefined;
+    const [classes, setClasses] = useState<ScheduleClass[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -31,27 +32,41 @@ export default function SchedulePage() {
             setLoading(true);
             setError(null);
             try {
-                const enrollRes = await fetch(
-                    `${BASE_URL}/enrollments?studentId=${session.user.id}`,
-                    { credentials: "include" }
-                );
-                if (!enrollRes.ok) throw new Error("Failed to fetch enrollments");
-                const enrollData: { data: Enrollment[] } = await enrollRes.json();
-                const enrollments = enrollData.data ?? [];
+                if (userRole === 'admin') {
+                    const res = await fetch(`${BASE_URL}classes`, { credentials: "include" });
+                    if (!res.ok) throw new Error("Failed to fetch classes");
+                    const data: { data: ClassDetails[] } = await res.json();
+                    setClasses(data.data ?? []);
+                } else if (userRole === 'teacher') {
+                    const res = await fetch(
+                        `${BASE_URL}classes?teacherId=${session.user.id}`,
+                        { credentials: "include" }
+                    );
+                    if (!res.ok) throw new Error("Failed to fetch classes");
+                    const data: { data: ClassDetails[] } = await res.json();
+                    setClasses(data.data ?? []);
+                } else {
+                    const enrollRes = await fetch(
+                        `${BASE_URL}/enrollments?studentId=${session.user.id}`,
+                        { credentials: "include" }
+                    );
+                    if (!enrollRes.ok) throw new Error("Failed to fetch enrollments");
+                    const enrollData: { data: Enrollment[] } = await enrollRes.json();
+                    const enrollments = enrollData.data ?? [];
 
-                const classResults = await Promise.all(
-                    enrollments.map(async (enrollment) => {
-                        const classRes = await fetch(
-                            `${BASE_URL}classes/${enrollment.classId}`,
-                            { credentials: "include" }
-                        );
-                        if (!classRes.ok) return null;
-                        const classData: { data: ClassDetails } = await classRes.json();
-                        return { ...classData.data, enrollmentId: enrollment.id } as EnrolledClass;
-                    })
-                );
-
-                setClasses(classResults.filter((c): c is EnrolledClass => c !== null));
+                    const classResults = await Promise.all(
+                        enrollments.map(async (enrollment) => {
+                            const classRes = await fetch(
+                                `${BASE_URL}classes/${enrollment.classId}`,
+                                { credentials: "include" }
+                            );
+                            if (!classRes.ok) return null;
+                            const classData: { data: ClassDetails } = await classRes.json();
+                            return { ...classData.data, enrollmentId: enrollment.id } as ScheduleClass;
+                        })
+                    );
+                    setClasses(classResults.filter((c): c is ScheduleClass => c !== null));
+                }
             } catch (err) {
                 setError(err instanceof Error ? err.message : "Something went wrong");
             } finally {
@@ -60,14 +75,24 @@ export default function SchedulePage() {
         };
 
         fetchSchedule();
-    }, [session?.user?.id]);
+    }, [session?.user?.id, userRole]);
+
+    const subtitle =
+        userRole === 'admin' ? 'All classes in the system.' :
+        userRole === 'teacher' ? 'Classes you are teaching.' :
+        'Classes you are enrolled in.';
+
+    const emptyMessage =
+        userRole === 'admin' ? 'No classes found in the system.' :
+        userRole === 'teacher' ? 'You are not assigned to any classes.' :
+        'You are not enrolled in any classes. Ask your teacher for an invite code.';
 
     return (
         <ListView>
             <Breadcrumb />
             <h1 className="page-title">My Schedule</h1>
             <div className="intro-row">
-                <p className="text-muted-foreground">Classes you are enrolled in.</p>
+                <p className="text-muted-foreground">{subtitle}</p>
             </div>
 
             {loading && (
@@ -103,9 +128,7 @@ export default function SchedulePage() {
                 <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
                     <CalendarDays className="h-12 w-12 text-muted-foreground" />
                     <p className="text-lg font-medium text-foreground">No classes yet</p>
-                    <p className="text-sm text-muted-foreground">
-                        You are not enrolled in any classes. Ask your teacher for an invite code.
-                    </p>
+                    <p className="text-sm text-muted-foreground">{emptyMessage}</p>
                 </div>
             )}
 
