@@ -59,7 +59,6 @@ services:
       - ./classroom-backend/.env
     environment:
       KAFKA_BROKER: kafka:9092
-    platform: linux/arm64
     depends_on:
       - kafka
       - redis
@@ -101,7 +100,6 @@ services:
       - ./voice-service/.env
     environment:
       KAFKA_BROKER: kafka:9092
-    platform: linux/arm64
     depends_on:
       - kafka
     networks:
