@@ -10,6 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, FileText, Plus, Trash2, Users } from 'lucide-react';
+import { useSession } from '@/lib/auth-client';
 
 const BACKEND = import.meta.env.VITE_BACKEND_BASE_URL || 'http://localhost:3001';
 
@@ -23,6 +24,9 @@ type CollabFile = {
 export default function CollaboratePage() {
     const { classId } = useParams<{ classId: string }>();
     const navigate = useNavigate();
+    const { data: session } = useSession();
+    const userRole = (session?.user as any)?.role;
+    const canManageFiles = userRole === 'teacher' || userRole === 'admin';
 
     const [files, setFiles] = useState<CollabFile[]>([]);
     const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
@@ -47,9 +51,9 @@ export default function CollaboratePage() {
     useEffect(() => {
         if (!classId) return;
         setIsLoadingFiles(true);
-        fetch(`${BACKEND}/api/collaboration/classes/${classId}/files`, { credentials: 'include' })
+        fetch(`${BACKEND}collaboration/classes/${classId}/files`, { credentials: 'include' })
             .then(r => r.json())
-            .then(data => setFiles(Array.isArray(data) ? data : (data.files ?? [])))
+            .then(data => setFiles(Array.isArray(data) ? data : (data.data ?? [])))
             .catch(() => {})
             .finally(() => setIsLoadingFiles(false));
     }, [classId]);
@@ -59,16 +63,17 @@ export default function CollaboratePage() {
         if (!name || !classId) return;
         setIsCreating(true);
         try {
-            const res = await fetch(`${BACKEND}/api/collaboration/classes/${classId}/files`, {
+            const res = await fetch(`${BACKEND}collaboration/classes/${classId}/files`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
                 body: JSON.stringify({ name }),
             });
             if (res.ok) {
-                const file: CollabFile = await res.json();
+                const json = await res.json();
+                const file: CollabFile = json.data;
                 setFiles(prev => [...prev, file]);
-                setSelectedFileId(file.id);
+                setSelectedFileId(String(file.id));
                 setNewFileName('');
                 setShowNewFileInput(false);
             }
@@ -79,7 +84,7 @@ export default function CollaboratePage() {
 
     const handleDeleteFile = async (fileId: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        const res = await fetch(`${BACKEND}/api/collaboration/files/${fileId}`, {
+        const res = await fetch(`${BACKEND}collaboration/files/${fileId}`, {
             method: 'DELETE',
             credentials: 'include',
         });
@@ -114,44 +119,46 @@ export default function CollaboratePage() {
                         )}
                     </div>
 
-                    <div className="px-2 py-2 border-b">
-                        {showNewFileInput ? (
-                            <div className="flex gap-1">
-                                <Input
-                                    autoFocus
-                                    placeholder="filename.js"
-                                    value={newFileName}
-                                    onChange={e => setNewFileName(e.target.value)}
-                                    onKeyDown={e => {
-                                        if (e.key === 'Enter') handleCreateFile();
-                                        if (e.key === 'Escape') {
-                                            setShowNewFileInput(false);
-                                            setNewFileName('');
-                                        }
-                                    }}
-                                    className="h-7 text-xs"
-                                />
+                    {canManageFiles && (
+                        <div className="px-2 py-2 border-b">
+                            {showNewFileInput ? (
+                                <div className="flex gap-1">
+                                    <Input
+                                        autoFocus
+                                        placeholder="filename.js"
+                                        value={newFileName}
+                                        onChange={e => setNewFileName(e.target.value)}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') handleCreateFile();
+                                            if (e.key === 'Escape') {
+                                                setShowNewFileInput(false);
+                                                setNewFileName('');
+                                            }
+                                        }}
+                                        className="h-7 text-xs"
+                                    />
+                                    <Button
+                                        size="sm"
+                                        className="h-7 px-2 text-xs shrink-0"
+                                        onClick={handleCreateFile}
+                                        disabled={isCreating || !newFileName.trim()}
+                                    >
+                                        {isCreating ? '…' : 'Add'}
+                                    </Button>
+                                </div>
+                            ) : (
                                 <Button
+                                    variant="outline"
                                     size="sm"
-                                    className="h-7 px-2 text-xs shrink-0"
-                                    onClick={handleCreateFile}
-                                    disabled={isCreating || !newFileName.trim()}
+                                    className="w-full h-7 text-xs gap-1.5"
+                                    onClick={() => setShowNewFileInput(true)}
                                 >
-                                    {isCreating ? '…' : 'Add'}
+                                    <Plus className="h-3.5 w-3.5" />
+                                    New File
                                 </Button>
-                            </div>
-                        ) : (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="w-full h-7 text-xs gap-1.5"
-                                onClick={() => setShowNewFileInput(true)}
-                            >
-                                <Plus className="h-3.5 w-3.5" />
-                                New File
-                            </Button>
-                        )}
-                    </div>
+                            )}
+                        </div>
+                    )}
 
                     <ScrollArea className="flex-1">
                         {isLoadingFiles ? (
@@ -180,14 +187,16 @@ export default function CollaboratePage() {
                                             <FileText className="h-3.5 w-3.5 shrink-0" />
                                             <span className="truncate">{file.name}</span>
                                         </span>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive hover:bg-transparent"
-                                            onClick={e => handleDeleteFile(file.id, e)}
-                                        >
-                                            <Trash2 className="h-3 w-3" />
-                                        </Button>
+                                        {canManageFiles && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive hover:bg-transparent"
+                                                onClick={e => handleDeleteFile(file.id, e)}
+                                            >
+                                                <Trash2 className="h-3 w-3" />
+                                            </Button>
+                                        )}
                                     </button>
                                 ))}
                             </div>

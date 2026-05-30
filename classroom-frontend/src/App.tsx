@@ -135,6 +135,9 @@ function App() {
                     <Route path="show/:id" element={<SubjectsShow />} />
                   </Route>
 
+                  {/* Everyone - Collaboration */}
+                  <Route path="classes/:classId/collaborate" element={<CollaboratePage />} />
+
                   {/* Teacher + Admin */}
                   <Route element={<RoleGuard allowedRoles={['teacher', 'admin']} />}>
                     <Route path="/" element={<Dashboard />} />
@@ -144,7 +147,6 @@ function App() {
                       <Route path="create" element={<ClassesCreate />} />
                       <Route path="edit/:id" element={<ClassesEdit />} />
                       <Route path="show/:id" element={<ClassesShow />} />
-                      <Route path=":classId/collaborate" element={<CollaboratePage />} />
                     </Route>
                     <Route path="subjects">
                       <Route index element={<SubjectsList />} />
