@@ -19,7 +19,7 @@ export function useCollaboration(classId: string, fileId: string) {
         saveTimerRef.current = setTimeout(async () => {
             const state = Y.encodeStateAsUpdate(ydoc);
             try {
-                await fetch(`${BACKEND_URL}/api/collaboration/files/${fileId}/state`, {
+                await fetch(`${BACKEND_URL}collaboration/files/${fileId}/state`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',

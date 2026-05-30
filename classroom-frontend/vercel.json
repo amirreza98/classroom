@@ -5,9 +5,12 @@
       "destination": "http://54.196.171.30:8000/api/:path*"
     },
     {
+      "source": "/ws/:path*",
+      "destination": "http://54.196.171.30:8083/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
-  
 }
