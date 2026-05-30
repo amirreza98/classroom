@@ -173,7 +173,15 @@ jobs:
       - build-and-push-analytics-service
       - build-and-push-notifications-service
       - build-and-push-collaboration-service
-    if: always()
+    if: |
+      always() && (
+        needs.build-and-push-backend.result == 'success' ||
+        needs.build-and-push-gateway.result == 'success' ||
+        needs.build-and-push-voice-service.result == 'success' ||
+        needs.build-and-push-analytics-service.result == 'success' ||
+        needs.build-and-push-notifications-service.result == 'success' ||
+        needs.build-and-push-collaboration-service.result == 'success'
+      )
     steps:
       - uses: actions/checkout@v3
       - name: Copy docker-compose to EC2
