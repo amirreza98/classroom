@@ -41,7 +41,6 @@ export const auth = betterAuth({
         jwt({
             jwt: {
                 expirationTime: "1h",
-                // Include role and email as claims so the gateway can inject them as headers
                 definePayload: async ({ user }) => ({
                     role: (user as any).role ?? 'student',
                     email: user.email,
