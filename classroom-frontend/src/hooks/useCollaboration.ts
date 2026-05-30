@@ -45,7 +45,7 @@ export function useCollaboration(classId: string, fileId: string) {
 
                 // Load persisted state from backend
                 try {
-                    const res = await fetch(`${BACKEND_URL}/api/collaboration/files/${fileId}/state`, {
+                    const res = await fetch(`${BACKEND_URL}collaboration/files/${fileId}/state`, {
                         credentials: 'include',
                     });
                     if (res.ok) {
