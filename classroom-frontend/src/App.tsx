@@ -23,6 +23,7 @@ import ClassesList from "@/pages/classes/list";
 import ClassesCreate from "@/pages/classes/create";
 import ClassesShow from "@/pages/classes/show";
 import ClassesEdit from "@/pages/classes/edit";
+import CollaboratePage from "@/pages/classes/collaborate";
 
 import UsersList from "@/pages/users/list";
 import UsersCreate from "@/pages/users/create";
@@ -36,8 +37,9 @@ import DepartmentsShow from "@/pages/departments/show";
 
 import VoiceList from "./pages/voice/list";
 import VoiceConversation from "./pages/voice/conversation";
+import SchedulePage from "./pages/schedule";
 
-import { Home, BookOpen, GraduationCap, Users, Building2, Headphones } from "lucide-react";
+import { Home, BookOpen, GraduationCap, Users, Building2, Headphones, CalendarDays } from "lucide-react";
 import { AuthGuard } from "./components/auth-guard";
 import Login from "./pages/login";
 import Register from "./pages/register";
@@ -105,6 +107,11 @@ function App() {
                   list: '/voice',
                   meta: { label: 'Voice Library', icon: <Headphones /> }
                 },
+                {
+                  name: 'schedule',
+                  list: '/schedule',
+                  meta: { label: 'My Schedule', icon: <CalendarDays /> }
+                },
               ]}
             >
               <Routes>
@@ -113,6 +120,11 @@ function App() {
 
                 <Route element={<AuthGuard><Layout><Outlet /></Layout></AuthGuard>}>
                   
+                  {/* Student only */}
+                  <Route element={<RoleGuard allowedRoles={['student']} />}>
+                    <Route path="schedule" element={<SchedulePage />} />
+                  </Route>
+
                   {/* Everyone */}
                   <Route path="voice">
                     <Route index element={<VoiceList />} />
@@ -132,6 +144,7 @@ function App() {
                       <Route path="create" element={<ClassesCreate />} />
                       <Route path="edit/:id" element={<ClassesEdit />} />
                       <Route path="show/:id" element={<ClassesShow />} />
+                      <Route path=":classId/collaborate" element={<CollaboratePage />} />
                     </Route>
                     <Route path="subjects">
                       <Route index element={<SubjectsList />} />

@@ -11,6 +11,7 @@ import classesRouter from './routes/classes.js';
 import departmentsRouter from './routes/departments.js';
 import enrollmentsRouter from './routes/enrollments.js';
 import dashboardRouter from './routes/dashboard.js';
+import collaborationRouter from './routes/collaboration.js';
 import securityMiddleware from './middleware/security.js';
 import { auth } from './lib/auth.js';
 import {producer} from "./kafka.js"
@@ -43,6 +44,7 @@ app.use('/api/classes', classesRouter);
 app.use('/api/departments', departmentsRouter);
 app.use('/api/enrollments', enrollmentsRouter);
 app.use('/api/dashboard', dashboardRouter);
+app.use('/api/collaboration', collaborationRouter);
 
 app.get('/', (req, res) => {
     res.send('Hello, welcome to the Classroom');

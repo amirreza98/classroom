@@ -1,5 +1,6 @@
 import { relations } from 'drizzle-orm';
 import {
+    customType,
     index,
     integer,
     jsonb,
@@ -10,6 +11,10 @@ import {
     uniqueIndex,
     varchar,
 } from 'drizzle-orm/pg-core';
+
+const bytea = customType<{ data: Buffer; notNull: false; default: false }>({
+    dataType() { return 'bytea'; },
+});
 import { user } from './auth.js';
 
 const timestamps = {
@@ -105,6 +110,31 @@ export const enrollmentsRelations = relations(enrollments, ({ one }) => ({
         references: [classes.id],
     }),
 }));
+
+export const collaborativeFiles = pgTable(
+    'collaborative_files',
+    {
+        id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+        classId: integer('class_id').notNull().references(() => classes.id, { onDelete: 'cascade' }),
+        name: text('name').notNull(),
+        yjsState: bytea('yjs_state'),
+        createdBy: text('created_by').notNull(),
+        ...timestamps,
+    },
+    (table) => [
+        index('collaborative_files_class_id_idx').on(table.classId),
+    ]
+);
+
+export const collaborativeFilesRelations = relations(collaborativeFiles, ({ one }) => ({
+    class: one(classes, {
+        fields: [collaborativeFiles.classId],
+        references: [classes.id],
+    }),
+}));
+
+export type CollaborativeFile = typeof collaborativeFiles.$inferSelect;
+export type NewCollaborativeFile = typeof collaborativeFiles.$inferInsert;
 
 export type Department = typeof departments.$inferSelect;
 export type NewDepartment = typeof departments.$inferInsert;
