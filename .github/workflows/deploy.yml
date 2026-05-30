@@ -6,42 +6,7 @@ on:
       - main
 
 jobs:
-  detect-changes:
-    runs-on: ubuntu-latest
-    outputs:
-      backend: ${{ steps.changes.outputs.backend }}
-      frontend: ${{ steps.changes.outputs.frontend }}
-      gateway: ${{ steps.changes.outputs.gateway }}
-      voice: ${{ steps.changes.outputs.voice }}
-      analytics: ${{ steps.changes.outputs.analytics }}
-      notifications: ${{ steps.changes.outputs.notifications }}
-      collaboration: ${{ steps.changes.outputs.collaboration }}
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 2
-      - uses: dorny/paths-filter@v2
-        id: changes
-        with:
-          filters: |
-            backend:
-              - 'classroom-backend/**'
-            frontend:
-              - 'classroom-frontend/**'
-            gateway:
-              - 'gateway-service/**'
-            voice:
-              - 'voice-service/**'
-            analytics:
-              - 'analytics-service/**'
-            notifications:
-              - 'notifications-service/**'
-            collaboration:
-              - 'collaboration-service/**'
-
-  build-and-push-backend:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.backend == 'true'
+  build-backend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -57,50 +22,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: ${{ secrets.DOCKER_USERNAME }}/classroom-backend:latest
 
-  build-and-push-frontend:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.frontend == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
-      - uses: docker/build-push-action@v5
-        with:
-          context: ./classroom-frontend
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ secrets.DOCKER_USERNAME }}/classroom-frontend:latest
-
-  build-and-push-gateway:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.gateway == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-java@v3
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-      - run: cd gateway-service && ./mvnw clean package -DskipTests
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
-      - uses: docker/build-push-action@v5
-        with:
-          context: ./gateway-service
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ secrets.DOCKER_USERNAME }}/classroom-gateway-service:latest
-
-  build-and-push-voice-service:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.voice == 'true'
+  build-voice:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -116,98 +38,19 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: ${{ secrets.DOCKER_USERNAME }}/classroom-voice-service:latest
 
-  build-and-push-analytics-service:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.analytics == 'true'
+  deploy:
     runs-on: ubuntu-latest
+    needs: [build-backend, build-voice]
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-java@v3
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-      - run: cd analytics-service && ./mvnw clean package -DskipTests
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
-      - uses: docker/build-push-action@v5
-        with:
-          context: ./analytics-service
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ secrets.DOCKER_USERNAME }}/classroom-analytics-service:latest
-
-  build-and-push-notifications-service:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.notifications == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-java@v3
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-      - run: cd notifications-service && ./mvnw clean package -DskipTests
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
-      - uses: docker/build-push-action@v5
-        with:
-          context: ./notifications-service
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ secrets.DOCKER_USERNAME }}/classroom-notifications-service:latest
-
-  build-and-push-collaboration-service:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.collaboration == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-java@v3
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-      - run: cd collaboration-service && ./mvnw clean package -DskipTests
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
-      - uses: docker/build-push-action@v5
-        with:
-          context: ./collaboration-service
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ secrets.DOCKER_USERNAME }}/classroom-collaboration-service:latest
-
-  deploy-to-ec2:
-    runs-on: ubuntu-latest
-    needs:
-      - build-and-push-backend
-      - build-and-push-frontend
-      - build-and-push-gateway
-      - build-and-push-voice-service
-      - build-and-push-analytics-service
-      - build-and-push-notifications-service
-      - build-and-push-collaboration-service
-    if: always()
-    steps:
-      - uses: actions/checkout@v3
-      - name: Copy docker-compose to EC2
-        uses: appleboy/scp-action@v0.1.7
+      - uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "docker-compose.yml"
           target: "~/classroom/"
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.0.0
+      - uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
@@ -216,13 +59,8 @@ jobs:
           script: |
             cd classroom
             sed -i 's|build: ./classroom-backend|image: ${{ secrets.DOCKER_USERNAME }}/classroom-backend:latest|g' docker-compose.yml
-            sed -i 's|build: ./classroom-frontend|image: ${{ secrets.DOCKER_USERNAME }}/classroom-frontend:latest|g' docker-compose.yml
-            sed -i 's|build: ./gateway-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-gateway-service:latest|g' docker-compose.yml
             sed -i 's|build: ./voice-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-voice-service:latest|g' docker-compose.yml
-            sed -i 's|build: ./analytics-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-analytics-service:latest|g' docker-compose.yml
-            sed -i 's|build: ./notifications-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-notifications-service:latest|g' docker-compose.yml
-            sed -i 's|build: ./collaboration-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-collaboration-service:latest|g' docker-compose.yml
-            docker compose pull
-            docker compose up -d
-            sleep 20
+            docker compose pull backend voice-service
+            docker compose up -d backend voice-service
+            sleep 15
             docker exec backend npx drizzle-kit migrate
