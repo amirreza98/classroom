@@ -53,7 +53,12 @@ public class RateLimitingFilter implements GlobalFilter {
                     String role = jwt.getClaimAsString("role");
                     int limit = ROLE_LIMITS.getOrDefault(role, 60);
 
+                    // onErrorReturn is scoped to checkLimit only: Redis failure → fail open.
+                    // chain.filter(exchange) must never be called twice for the same request;
+                    // the outer onErrorResume pattern was the bug (downstream errors bubbled
+                    // back up and triggered a second chain.filter call → UnsupportedOperationException).
                     return checkLimit("rl:" + userId, limit)
+                            .onErrorReturn(true)
                             .flatMap(allowed -> allowed
                                     ? chain.filter(exchange)
                                     : SecurityConfig.writeJson(
@@ -61,8 +66,7 @@ public class RateLimitingFilter implements GlobalFilter {
                                             HttpStatus.TOO_MANY_REQUESTS,
                                             "{\"error\":\"Too many requests\"}"));
                 })
-                .switchIfEmpty(chain.filter(exchange))
-                .onErrorResume(ex -> chain.filter(exchange)); // fail open on Redis errors
+                .switchIfEmpty(chain.filter(exchange));
     }
 
     private Mono<Boolean> checkLimit(String key, int limit) {
