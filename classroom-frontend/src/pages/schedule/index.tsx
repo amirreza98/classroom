@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { useSession } from "@/lib/auth-client";
 import { ListView } from "@/components/refine-ui/views/list-view";
@@ -7,8 +7,9 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BookOpen, CalendarDays, User } from "lucide-react";
-import type { ClassDetails, Enrollment } from "@/types";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BookOpen, CalendarDays, User, X } from "lucide-react";
+import type { ClassDetails, Department, Enrollment, Subject } from "@/types";
 
 const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL as string;
 
@@ -21,9 +22,15 @@ export default function SchedulePage() {
     const { data: session } = useSession();
     const navigate = useNavigate();
     const userRole = (session?.user as any)?.role as string | undefined;
-    const [classes, setClasses] = useState<ScheduleClass[]>([]);
+    const [allClasses, setAllClasses] = useState<ScheduleClass[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    // Admin filter state
+    const [departments, setDepartments] = useState<Department[]>([]);
+    const [subjects, setSubjects] = useState<Subject[]>([]);
+    const [filterDeptId, setFilterDeptId] = useState<number | null>(null);
+    const [filterSubjectId, setFilterSubjectId] = useState<number | null>(null);
 
     useEffect(() => {
         if (!session?.user?.id) return;
@@ -33,18 +40,15 @@ export default function SchedulePage() {
             setError(null);
             try {
                 if (userRole === 'admin') {
-                    const res = await fetch(`${BASE_URL}classes`, { credentials: "include" });
+                    const res = await fetch(`${BASE_URL}classes?limit=100`, { credentials: "include" });
                     if (!res.ok) throw new Error("Failed to fetch classes");
                     const data: { data: ClassDetails[] } = await res.json();
-                    setClasses(data.data ?? []);
+                    setAllClasses(data.data ?? []);
                 } else if (userRole === 'teacher') {
-                    const res = await fetch(
-                        `${BASE_URL}classes?teacherId=${session.user.id}`,
-                        { credentials: "include" }
-                    );
+                    const res = await fetch(`${BASE_URL}classes?limit=100`, { credentials: "include" });
                     if (!res.ok) throw new Error("Failed to fetch classes");
                     const data: { data: ClassDetails[] } = await res.json();
-                    setClasses(data.data ?? []);
+                    setAllClasses((data.data ?? []).filter(c => c.teacherId === session.user.id));
                 } else {
                     const enrollRes = await fetch(
                         `${BASE_URL}/enrollments?studentId=${session.user.id}`,
@@ -65,7 +69,7 @@ export default function SchedulePage() {
                             return { ...classData.data, enrollmentId: enrollment.id } as ScheduleClass;
                         })
                     );
-                    setClasses(classResults.filter((c): c is ScheduleClass => c !== null));
+                    setAllClasses(classResults.filter((c): c is ScheduleClass => c !== null));
                 }
             } catch (err) {
                 setError(err instanceof Error ? err.message : "Something went wrong");
@@ -77,23 +81,98 @@ export default function SchedulePage() {
         fetchSchedule();
     }, [session?.user?.id, userRole]);
 
+    // Fetch departments + subjects for admin filter dropdowns
+    useEffect(() => {
+        if (userRole !== 'admin') return;
+        const fetchMeta = async () => {
+            const [deptRes, subjectRes] = await Promise.all([
+                fetch(`${BASE_URL}departments?limit=100`, { credentials: "include" }),
+                fetch(`${BASE_URL}subjects?limit=100`, { credentials: "include" }),
+            ]);
+            if (deptRes.ok) setDepartments((await deptRes.json()).data ?? []);
+            if (subjectRes.ok) setSubjects((await subjectRes.json()).data ?? []);
+        };
+        fetchMeta();
+    }, [userRole]);
+
+    const subjectOptions = useMemo(
+        () => filterDeptId !== null ? subjects.filter(s => s.departmentId === filterDeptId) : subjects,
+        [subjects, filterDeptId]
+    );
+
+    const classes = useMemo(() => {
+        if (userRole !== 'admin') return allClasses;
+        if (filterSubjectId !== null) return allClasses.filter(c => c.subjectId === filterSubjectId);
+        if (filterDeptId !== null) return allClasses.filter(c => c.subject?.departmentId === filterDeptId);
+        return allClasses;
+    }, [allClasses, userRole, filterDeptId, filterSubjectId]);
+
+    const handleDeptChange = (val: string) => {
+        setFilterDeptId(val === 'all' ? null : Number(val));
+        setFilterSubjectId(null);
+    };
+
+    const handleSubjectChange = (val: string) => {
+        setFilterSubjectId(val === 'all' ? null : Number(val));
+    };
+
+    const clearFilters = () => {
+        setFilterDeptId(null);
+        setFilterSubjectId(null);
+    };
+
     const subtitle =
         userRole === 'admin' ? 'All classes in the system.' :
         userRole === 'teacher' ? 'Classes you are teaching.' :
         'Classes you are enrolled in.';
 
     const emptyMessage =
-        userRole === 'admin' ? 'No classes found in the system.' :
+        userRole === 'admin' ? 'No classes match the selected filters.' :
         userRole === 'teacher' ? 'You are not assigned to any classes.' :
         'You are not enrolled in any classes. Ask your teacher for an invite code.';
 
     return (
         <ListView>
             <Breadcrumb />
-            <h1 className="page-title">My Schedule</h1>
+            <h1 className="page-title">Schedules</h1>
             <div className="intro-row">
                 <p className="text-muted-foreground">{subtitle}</p>
             </div>
+
+            {userRole === 'admin' && !loading && (
+                <div className="flex flex-wrap gap-3 items-center mt-2">
+                    <Select value={filterDeptId?.toString() ?? 'all'} onValueChange={handleDeptChange}>
+                        <SelectTrigger className="w-48">
+                            <SelectValue placeholder="All Departments" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Departments</SelectItem>
+                            {departments.map(d => (
+                                <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    <Select value={filterSubjectId?.toString() ?? 'all'} onValueChange={handleSubjectChange}>
+                        <SelectTrigger className="w-48">
+                            <SelectValue placeholder="All Subjects" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Subjects</SelectItem>
+                            {subjectOptions.map(s => (
+                                <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    {(filterDeptId !== null || filterSubjectId !== null) && (
+                        <Button variant="ghost" size="sm" onClick={clearFilters}>
+                            <X className="h-4 w-4 mr-1" />
+                            Clear filters
+                        </Button>
+                    )}
+                </div>
+            )}
 
             {loading && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">

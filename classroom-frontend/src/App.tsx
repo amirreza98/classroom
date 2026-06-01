@@ -129,9 +129,9 @@ function App() {
                     <Route index element={<VoiceList />} />
                     <Route path=":bookId" element={<VoiceConversation />} />
                   </Route>
-                  <Route path="/subjects">
-                    <Route index element={<SubjectsList />} />
-                    <Route path="show/:id" element={<SubjectsShow />} />
+                  <Route path="/classes">
+                    <Route index element={<ClassesList />} />
+                    <Route path="show/:id" element={<ClassesShow />} />
                   </Route>
 
                   {/* Teacher + Admin */}
