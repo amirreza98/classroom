@@ -208,6 +208,6 @@ jobs:
             sed -i 's|build: ./notifications-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-notifications-service:latest|g' docker-compose.yml
             sed -i 's|build: ./collaboration-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-collaboration-service:latest|g' docker-compose.yml
             docker compose pull
-            docker compose up -d
+            docker compose up -d --force-recreate
             sleep 20
             docker exec backend npx drizzle-kit migrate
