@@ -81,17 +81,14 @@ public class SecurityConfig {
                             var jwt = jwtAuth.getToken();
                             String role = jwt.getClaimAsString("role");
                             String email = jwt.getClaimAsString("email");
-                            // r.header() appends to the builder's own mutable collection;
-                            // r.headers(consumer) passes the original ReadOnlyHttpHeaders
-                            // directly to the consumer, causing UnsupportedOperationException on .set()
-                            var mutated = exchange.mutate()
-                                    .request(r -> {
-                                        r.header("X-User-Id", jwt.getSubject());
-                                        if (role != null) r.header("X-User-Role", role);
-                                        if (email != null) r.header("X-User-Email", email);
-                                    })
+
+                            var mutatedRequest = exchange.getRequest().mutate()
+                                    .header("X-User-Id", jwt.getSubject())
+                                    .header("X-User-Role", role != null ? role : "")
+                                    .header("X-User-Email", email != null ? email : "")
                                     .build();
-                            return chain.filter(mutated);
+
+                            return chain.filter(exchange.mutate().request(mutatedRequest).build());
                         })
                         .switchIfEmpty(chain.filter(exchange));
     }
