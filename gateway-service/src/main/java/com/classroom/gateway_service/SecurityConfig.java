@@ -79,16 +79,9 @@ public class SecurityConfig {
                                 return chain.filter(exchange);
                             }
                             var jwt = jwtAuth.getToken();
-                            String role = jwt.getClaimAsString("role");
-                            String email = jwt.getClaimAsString("email");
-
-                            var mutatedRequest = exchange.getRequest().mutate()
-                                    .header("X-User-Id", jwt.getSubject())
-                                    .header("X-User-Role", role != null ? role : "")
-                                    .header("X-User-Email", email != null ? email : "")
-                                    .build();
-
-                            return chain.filter(exchange.mutate().request(mutatedRequest).build());
+                            System.out.println("JWT validated - userId: " + jwt.getSubject() 
+                                + " role: " + jwt.getClaimAsString("role"));
+                            return chain.filter(exchange);
                         })
                         .switchIfEmpty(chain.filter(exchange));
     }
