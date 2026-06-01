@@ -15,16 +15,12 @@ spring:
 
   cloud:
     gateway:
+      # Routes are matched top-to-bottom; specific paths must come before the /api/** catch-all
       routes:
         - id: auth-service
           uri: ${EXPRESS_SERVICE_URL:http://localhost:8000}
           predicates:
             - Path=/api/auth/**
-
-        - id: crud-service
-          uri: ${EXPRESS_SERVICE_URL:http://localhost:8000}
-          predicates:
-            - Path=/api/**
 
         - id: voice-service
           uri: ${VOICE_SERVICE_URL:http://localhost:3001}
@@ -45,6 +41,12 @@ spring:
           uri: ${COLLABORATION_SERVICE_URL:http://localhost:8083}
           predicates:
             - Path=/api/collaboration/**
+
+        # Catch-all for the Express CRUD backend — must be last
+        - id: crud-service
+          uri: ${EXPRESS_SERVICE_URL:http://localhost:8000}
+          predicates:
+            - Path=/api/**
 
   data:
     redis:

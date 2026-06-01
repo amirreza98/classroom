@@ -1,20 +1,28 @@
 package com.classroom.gateway_service;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
-import org.springframework.security.config.Customizer;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
+import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
+import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+
+import java.nio.charset.StandardCharsets;
 
 @Configuration
 @EnableWebFluxSecurity
@@ -27,23 +35,41 @@ public class SecurityConfig {
         return http
                 .securityMatcher(ServerWebExchangeMatchers.pathMatchers("/api/auth/**"))
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
-                .authorizeExchange(exchanges -> exchanges.anyExchange().permitAll())
+                .authorizeExchange(ex -> ex.anyExchange().permitAll())
                 .build();
     }
 
-    // All other routes require a valid JWT issued by Better Auth
+    // All other routes require a valid JWT; missing/invalid token → JSON 401
     @Bean
     @Order(2)
     public SecurityWebFilterChain protectedRouteChain(ServerHttpSecurity http) {
         return http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
-                .authorizeExchange(exchanges -> exchanges.anyExchange().authenticated())
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+                .authorizeExchange(ex -> ex.anyExchange().authenticated())
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .jwt(jwt -> {})
+                        .authenticationEntryPoint((exchange, ex) ->
+                                writeJson(exchange, HttpStatus.UNAUTHORIZED, "{\"error\":\"Unauthorized\"}")
+                        )
+                )
                 .build();
     }
 
-    // After JWT is validated, inject user identity headers for downstream services
+    // NimbusReactiveJwtDecoder fetches the JWK set lazily on the first validated request,
+    // so the gateway starts fine even when the JWKS endpoint is temporarily unavailable.
+    // Better Auth issues ES256 tokens, so we pin that algorithm to reject unexpected algs.
     @Bean
+    public ReactiveJwtDecoder jwtDecoder(
+            @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}") String jwkSetUri) {
+        return NimbusReactiveJwtDecoder
+                .withJwkSetUri(jwkSetUri)
+                .jwsAlgorithm(SignatureAlgorithm.ES256)
+                .build();
+    }
+
+    // Inject user-identity headers so downstream services can trust them without re-validating the JWT
+    @Bean
+    @Order(0)
     public GlobalFilter jwtHeadersFilter() {
         return (ServerWebExchange exchange, GatewayFilterChain chain) ->
                 ReactiveSecurityContextHolder.getContext()
@@ -54,14 +80,25 @@ public class SecurityConfig {
                             }
                             var jwt = jwtAuth.getToken();
                             var mutated = exchange.mutate()
-                                    .request(r -> r.headers(headers -> {
-                                        headers.set("X-User-Id", jwt.getSubject());
+                                    .request(r -> r.headers(h -> {
+                                        h.set("X-User-Id", jwt.getSubject());
                                         String role = jwt.getClaimAsString("role");
-                                        if (role != null) headers.set("X-User-Role", role);
+                                        if (role != null) h.set("X-User-Role", role);
+                                        String email = jwt.getClaimAsString("email");
+                                        if (email != null) h.set("X-User-Email", email);
                                     }))
                                     .build();
                             return chain.filter(mutated);
                         })
                         .switchIfEmpty(chain.filter(exchange));
+    }
+
+    static Mono<Void> writeJson(ServerWebExchange exchange, HttpStatus status, String body) {
+        var response = exchange.getResponse();
+        response.setStatusCode(status);
+        response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
+        DataBuffer buf = response.bufferFactory()
+                .wrap(body.getBytes(StandardCharsets.UTF_8));
+        return response.writeWith(Mono.just(buf));
     }
 }
