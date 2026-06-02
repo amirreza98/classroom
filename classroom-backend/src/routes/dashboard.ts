@@ -9,6 +9,8 @@ const router = express.Router();
 
 // GET /dashboard/stats - overview counts
 router.get("/stats", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user.role === 'student') return res.status(403).json({ error: 'Forbidden' });
     try {
         const [[userCount], [classCount], [subjectCount], [departmentCount], [enrollmentCount]] = await Promise.all([
             db.select({ count: count() }).from(user),
@@ -55,6 +57,8 @@ router.get("/stats", async (req, res) => {
 
 // GET /dashboard/charts - data for all charts
 router.get("/charts", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user.role === 'student') return res.status(403).json({ error: 'Forbidden' });
     try {
         // 1. Enrollment trends - enrollments per month (last 6 months)
         const enrollmentTrends = await db.execute(sql`

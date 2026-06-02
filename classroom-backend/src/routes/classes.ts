@@ -10,6 +10,7 @@ const router = express.Router();
 
 // GET /classes - list with search, filter, pagination
 router.get("/", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
     try {
         const { search, subject, teacher, page = 1, limit = 10 } = req.query;
 
@@ -78,6 +79,7 @@ router.get("/", async (req, res) => {
 
 // GET /classes/:id
 router.get('/:id', async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
     const classId = Number(req.params.id);
 
     if (!Number.isFinite(classId)) return res.status(400).json({ error: 'No Class found.' });
@@ -102,6 +104,8 @@ router.get('/:id', async (req, res) => {
 
 // POST /classes
 router.post('/', async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user.role === 'student') return res.status(403).json({ error: 'Forbidden' });
     try {
         const [createdClass] = await db
             .insert(classes)
@@ -137,6 +141,8 @@ router.post('/', async (req, res) => {
 
 // PUT /classes/:id
 router.put('/:id', async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user.role === 'student') return res.status(403).json({ error: 'Forbidden' });
     try {
         const classId = Number(req.params.id);
         if (!Number.isFinite(classId)) return res.status(400).json({ error: 'Invalid class ID' });
@@ -169,6 +175,8 @@ router.put('/:id', async (req, res) => {
 
 // DELETE /classes/:id
 router.delete('/:id', async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
     try {
         const classId = Number(req.params.id);
         if (!Number.isFinite(classId)) return res.status(400).json({ error: 'Invalid class ID' });

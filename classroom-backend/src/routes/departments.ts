@@ -8,6 +8,7 @@ const router = express.Router();
 
 // GET /departments - list with search + pagination
 router.get("/", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
     try {
         const { search, page = 1, limit = 10 } = req.query;
 
@@ -54,6 +55,7 @@ router.get("/", async (req, res) => {
 
 // GET /departments/:id
 router.get("/:id", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
     try {
         const departmentId = Number(req.params.id);
         if (!Number.isFinite(departmentId)) return res.status(400).json({ error: 'Invalid department ID' });
@@ -74,6 +76,8 @@ router.get("/:id", async (req, res) => {
 
 // POST /departments
 router.post("/", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
     try {
         const { code, name, description } = req.body;
         if (!code || !name) return res.status(400).json({ error: 'Code and name are required' });
@@ -93,6 +97,8 @@ router.post("/", async (req, res) => {
 
 // PUT /departments/:id
 router.put("/:id", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
     try {
         const departmentId = Number(req.params.id);
         if (!Number.isFinite(departmentId)) return res.status(400).json({ error: 'Invalid department ID' });
@@ -117,6 +123,8 @@ router.put("/:id", async (req, res) => {
 
 // DELETE /departments/:id
 router.delete("/:id", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
     try {
         const departmentId = Number(req.params.id);
         if (!Number.isFinite(departmentId)) return res.status(400).json({ error: 'Invalid department ID' });

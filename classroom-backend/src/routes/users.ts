@@ -8,6 +8,8 @@ const router = express.Router();
 
 // GET /users - list with search, role filter, pagination
 router.get("/", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
     try {
         const { search, role, page = 1, limit = 10 } = req.query;
 
@@ -62,6 +64,8 @@ router.get("/", async (req, res) => {
 
 // GET /users/:id
 router.get("/:id", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user.role !== 'admin' && req.user.id !== req.params.id) return res.status(403).json({ error: 'Forbidden' });
     try {
         const userId = req.params.id;
 
@@ -81,6 +85,8 @@ router.get("/:id", async (req, res) => {
 
 // PUT /users/:id
 router.put("/:id", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user.role !== 'admin' && req.user.id !== req.params.id) return res.status(403).json({ error: 'Forbidden' });
     try {
         const userId = req.params.id;
         const { name, email, role, image, imageCldPubId } = req.body;
@@ -103,6 +109,8 @@ router.put("/:id", async (req, res) => {
 
 // DELETE /users/:id
 router.delete("/:id", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
     try {
         const userId = req.params.id;
 

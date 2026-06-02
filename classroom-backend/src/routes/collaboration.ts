@@ -8,6 +8,7 @@ const router = express.Router();
 
 // GET /api/collaboration/classes/:classId/files
 router.get('/classes/:classId/files', async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
     try {
         const classId = Number(req.params.classId);
         if (!Number.isFinite(classId)) return res.status(400).json({ error: 'Invalid class ID' });
@@ -34,6 +35,8 @@ router.get('/classes/:classId/files', async (req, res) => {
 
 // POST /api/collaboration/classes/:classId/files
 router.post('/classes/:classId/files', async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user.role === 'student') return res.status(403).json({ error: 'Forbidden' });
     try {
         const classId = Number(req.params.classId);
         if (!Number.isFinite(classId)) return res.status(400).json({ error: 'Invalid class ID' });
@@ -57,6 +60,7 @@ router.post('/classes/:classId/files', async (req, res) => {
 
 // GET /api/collaboration/files/:fileId/state
 router.get('/files/:fileId/state', async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
     try {
         const fileId = Number(req.params.fileId);
         if (!Number.isFinite(fileId)) return res.status(400).json({ error: 'Invalid file ID' });
@@ -84,6 +88,7 @@ router.get('/files/:fileId/state', async (req, res) => {
 
 // PUT /api/collaboration/files/:fileId/state
 router.put('/files/:fileId/state', express.raw({ type: 'application/octet-stream', limit: '10mb' }), async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
     try {
         const fileId = Number(req.params.fileId);
         if (!Number.isFinite(fileId)) return res.status(400).json({ error: 'Invalid file ID' });
@@ -107,6 +112,8 @@ router.put('/files/:fileId/state', express.raw({ type: 'application/octet-stream
 
 // DELETE /api/collaboration/files/:fileId
 router.delete('/files/:fileId', async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user.role === 'student') return res.status(403).json({ error: 'Forbidden' });
     try {
         const fileId = Number(req.params.fileId);
         if (!Number.isFinite(fileId)) return res.status(400).json({ error: 'Invalid file ID' });

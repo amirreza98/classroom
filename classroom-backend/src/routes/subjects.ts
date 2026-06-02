@@ -8,6 +8,7 @@ const router = express.Router();
 
 // GET /subjects - list with search + pagination
 router.get("/", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
     try {
         const { search, department, page = 1, limit = 10 } = req.query;
 
@@ -67,6 +68,7 @@ router.get("/", async (req, res) => {
 
 // GET /subjects/:id
 router.get("/:id", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
     try {
         const subjectId = Number(req.params.id);
         if (!Number.isFinite(subjectId)) return res.status(400).json({ error: 'Invalid subject ID' });
@@ -91,6 +93,8 @@ router.get("/:id", async (req, res) => {
 
 // POST /subjects
 router.post("/", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
     try {
         const { name, code, description, departmentId } = req.body;
         if (!name || !code || !departmentId) {
@@ -112,6 +116,8 @@ router.post("/", async (req, res) => {
 
 // PUT /subjects/:id
 router.put("/:id", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
     try {
         const subjectId = Number(req.params.id);
         if (!Number.isFinite(subjectId)) return res.status(400).json({ error: 'Invalid subject ID' });
@@ -141,6 +147,8 @@ router.put("/:id", async (req, res) => {
 
 // DELETE /subjects/:id
 router.delete("/:id", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
     try {
         const subjectId = Number(req.params.id);
         if (!Number.isFinite(subjectId)) return res.status(400).json({ error: 'Invalid subject ID' });

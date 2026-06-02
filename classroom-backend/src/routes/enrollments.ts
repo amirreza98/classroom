@@ -9,9 +9,13 @@ const router = express.Router();
 
 // GET /enrollments?classId=X - get enrollments for a class with enrolled student info
 router.get("/", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    // Students can only query their own enrollments
+    const { classId, studentId, page = 1, limit = 50 } = req.query;
+    if (req.user.role === 'student' && studentId !== req.user.id) {
+        return res.status(403).json({ error: 'Forbidden' });
+    }
     try {
-        const { classId, studentId, page = 1, limit = 50 } = req.query;
-
         if (!classId && !studentId) return res.status(400).json({ error: 'classId or studentId query parameter is required' });
 
         const currentPage = Math.max(1, Number.isFinite(+page) ? +page : 1);
@@ -64,6 +68,8 @@ router.get("/", async (req, res) => {
 
 // POST /enrollments - enroll a student
 router.post("/", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user.role === 'student') return res.status(403).json({ error: 'Forbidden' });
     try {
         const { classId, studentId } = req.body;
 
@@ -103,6 +109,8 @@ router.post("/", async (req, res) => {
 
 // DELETE /enrollments/:id - unenroll a student
 router.delete("/:id", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user.role === 'student') return res.status(403).json({ error: 'Forbidden' });
     try {
         const enrollmentId = Number(req.params.id);
         if (!Number.isFinite(enrollmentId)) return res.status(400).json({ error: 'Invalid enrollment ID' });

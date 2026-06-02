@@ -15,7 +15,12 @@ const securityMiddleware = async (req: Request, res: Response, next: NextFunctio
         req.user = {
             id: String(gatewayUserId),
             role: gatewayUserRole as "admin" | "teacher" | "student",
+            email: String(req.headers['x-user-email'] ?? ''),
         };
+    }
+
+    if (process.env.NODE_ENV === 'production' && !req.user) {
+        return res.status(401).json({ error: 'Unauthorized', message: 'Direct backend access is not allowed' });
     }
 
 try{

@@ -71,37 +71,27 @@ public class SecurityConfig {
     @Bean
     @Order(-2)
     public GlobalFilter jwtHeadersFilter() {
-        return (ServerWebExchange exchange, GatewayFilterChain chain) -> {
-            String authHeader = exchange.getRequest().getHeaders().getFirst("Authorization");
-            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                return chain.filter(exchange);
-            }
-            
-            // Decode JWT without validation (validation already done by Spring Security)
-            String token = authHeader.substring(7);
-            String[] parts = token.split("\\.");
-            if (parts.length != 3) return chain.filter(exchange);
-            
-            try {
-                String payload = new String(java.util.Base64.getUrlDecoder().decode(parts[1]));
-                com.fasterxml.jackson.databind.JsonNode node = 
-                    new com.fasterxml.jackson.databind.ObjectMapper().readTree(payload);
-                
-                String userId = node.path("sub").asText("");
-                String role = node.path("role").asText("");
-                String email = node.path("email").asText("");
-                
+        return (exchange, chain) -> ReactiveSecurityContextHolder.getContext()
+            .map(SecurityContext::getAuthentication)
+            .filter(auth -> auth instanceof JwtAuthenticationToken)
+            .cast(JwtAuthenticationToken.class)
+            .flatMap(jwtAuth -> {
+                var jwt = jwtAuth.getToken();
+                String userId = jwt.getSubject();
+                String role   = jwt.getClaimAsString("role");
+                String email  = jwt.getClaimAsString("email");
+
+                System.out.println(">>> Injecting headers - userId: " + userId + " role: " + role);
+
                 var req = exchange.getRequest().mutate()
-                    .header("X-User-Id", userId)
-                    .header("X-User-Role", role)
-                    .header("X-User-Email", email)
+                    .header("X-User-Id",    userId != null ? userId : "")
+                    .header("X-User-Role",  role   != null ? role   : "")
+                    .header("X-User-Email", email  != null ? email  : "")
                     .build();
-                
+
                 return chain.filter(exchange.mutate().request(req).build());
-            } catch (Exception e) {
-                return chain.filter(exchange);
-            }
-        };
+            })
+            .switchIfEmpty(chain.filter(exchange));
     }
 
     static Mono<Void> writeJson(ServerWebExchange exchange, HttpStatus status, String body) {
