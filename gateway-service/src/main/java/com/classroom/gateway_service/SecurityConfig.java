@@ -7,8 +7,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.http.server.reactive.ServerHttpRequestDecorator;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
@@ -83,13 +86,24 @@ public class SecurityConfig {
 
                 System.out.println(">>> Injecting headers - userId: " + userId + " role: " + role);
 
-                var req = exchange.getRequest().mutate()
-                    .header("X-User-Id",    userId != null ? userId : "")
-                    .header("X-User-Role",  role   != null ? role   : "")
-                    .header("X-User-Email", email  != null ? email  : "")
-                    .build();
+                // mutate().header().build() wraps the merged headers in ReadOnlyHttpHeaders,
+                // causing UnsupportedOperationException when downstream gateway filters
+                // (hop-by-hop removal, forwarded-header processing) call .put() on them.
+                // A ServerHttpRequestDecorator with an explicit mutable copy avoids this.
+                HttpHeaders mutableHeaders = new HttpHeaders();
+                mutableHeaders.putAll(exchange.getRequest().getHeaders());
+                mutableHeaders.set("X-User-Id",    userId != null ? userId : "");
+                mutableHeaders.set("X-User-Role",  role   != null ? role   : "");
+                mutableHeaders.set("X-User-Email", email  != null ? email  : "");
 
-                return chain.filter(exchange.mutate().request(req).build());
+                ServerHttpRequest mutatedRequest = new ServerHttpRequestDecorator(exchange.getRequest()) {
+                    @Override
+                    public HttpHeaders getHeaders() {
+                        return mutableHeaders;
+                    }
+                };
+
+                return chain.filter(exchange.mutate().request(mutatedRequest).build());
             })
             .switchIfEmpty(chain.filter(exchange));
     }
