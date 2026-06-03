@@ -1,3 +1,8 @@
+// VITE_BACKEND_BASE_URL already points to the gateway (e.g. http://host:8080/api/)
+// The /api/auth/** path bypasses JWT validation in the gateway, so this request
+// only needs the session cookie — no Bearer token required.
+const TOKEN_URL = `${import.meta.env.VITE_BACKEND_BASE_URL}auth/token`;
+
 const EXPIRY_BUFFER_MS = 60_000; // refresh 1 min before expiry
 
 let _token: string | null = null;
@@ -15,7 +20,7 @@ function jwtExpiry(jwt: string): number | null {
 
 async function fetchFreshToken(): Promise<string | null> {
   try {
-    const res = await fetch('/api/auth/token', { credentials: 'include' });
+    const res = await fetch(TOKEN_URL, { credentials: 'include' });
     if (!res.ok) return null;
     const data = await res.json();
     const token: string | undefined = data?.token;
