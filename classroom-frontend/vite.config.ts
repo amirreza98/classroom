@@ -15,7 +15,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
-        target: "http://54.91.231.54:8000",  // ← service name, not localhost
+        target: "http://54.91.231.54:8080",  // gateway — validates JWT, routes to all services
         changeOrigin: true,
       },
     },

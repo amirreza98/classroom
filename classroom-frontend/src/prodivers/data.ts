@@ -1,5 +1,6 @@
 import { createDataProvider, CreateDataProviderOptions } from "@refinedev/rest";
 import { BACKEND_BASE_URL } from "@/constants";
+import { getToken } from "@/lib/token";
 import { CreateResponse, GetOneResponse, ListResponse } from "@/types";
 import { HttpError } from "@refinedev/core";
 
@@ -109,5 +110,14 @@ const options: CreateDataProviderOptions = {
     }
 };
 
-const { dataProvider } = createDataProvider(BACKEND_BASE_URL, options);
+const { dataProvider } = createDataProvider(BACKEND_BASE_URL, options, {
+    hooks: {
+        beforeRequest: [
+            async (request) => {
+                const token = await getToken();
+                if (token) request.headers.set('Authorization', `Bearer ${token}`);
+            },
+        ],
+    },
+});
 export { dataProvider };

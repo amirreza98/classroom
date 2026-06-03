@@ -27,6 +27,11 @@ spring:
           predicates:
             - Path=/api/voice/**
 
+        - id: voice-books
+          uri: ${VOICE_SERVICE_URL:http://localhost:3001}
+          predicates:
+            - Path=/api/books/**
+
         - id: analytics-service
           uri: ${ANALYTICS_SERVICE_URL:http://localhost:8081}
           predicates:

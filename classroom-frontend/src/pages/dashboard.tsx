@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { BACKEND_BASE_URL } from "@/constants";
 import { DashboardStats, ChartDataPoint } from "@/types";
+import { authHeader } from "@/lib/token";
 
 const PIE_COLORS = ["#f97316", "#3b82f6", "#22c55e", "#a855f7", "#ef4444"];
 const ROLE_COLORS: Record<string, string> = {
@@ -65,9 +66,10 @@ export default function Dashboard() {
     useEffect(() => {
         const fetchAll = async () => {
             try {
+                const headers = await authHeader();
                 const [statsRes, chartsRes] = await Promise.all([
-                    fetch(`${BACKEND_BASE_URL}dashboard/stats`, { credentials: "include" }),
-                    fetch(`${BACKEND_BASE_URL}dashboard/charts`, { credentials: "include" }),
+                    fetch(`${BACKEND_BASE_URL}dashboard/stats`, { headers }),
+                    fetch(`${BACKEND_BASE_URL}dashboard/charts`, { headers }),
                 ]);
 
                 if (!statsRes.ok || !chartsRes.ok) throw new Error("Failed to fetch dashboard data");

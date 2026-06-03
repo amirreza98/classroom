@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { authHeader } from '@/lib/token';
 import { useParams, useNavigate } from 'react-router';
 import { useOne } from '@refinedev/core';
 import { ClassDetails } from '@/types';
@@ -51,7 +52,8 @@ export default function CollaboratePage() {
     useEffect(() => {
         if (!classId) return;
         setIsLoadingFiles(true);
-        fetch(`${BACKEND}collaboration/classes/${classId}/files`, { credentials: 'include' })
+        authHeader()
+            .then(hdrs => fetch(`${BACKEND}collaboration/classes/${classId}/files`, { headers: hdrs }))
             .then(r => r.json())
             .then(data => setFiles(Array.isArray(data) ? data : (data.data ?? [])))
             .catch(() => {})
@@ -66,11 +68,10 @@ export default function CollaboratePage() {
         try {
             const res = await fetch(`${BACKEND}collaboration/classes/${classId}/files`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ 
-                    name, 
-                    createdBy: session?.user?.id 
+                headers: { ...(await authHeader()), 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name,
+                    createdBy: session?.user?.id
                 }),
             });
             if (res.ok) {
@@ -90,7 +91,7 @@ export default function CollaboratePage() {
         e.stopPropagation();
         const res = await fetch(`${BACKEND}collaboration/files/${fileId}`, {
             method: 'DELETE',
-            credentials: 'include',
+            headers: await authHeader(),
         });
         if (res.ok) {
             setFiles(prev => prev.filter(f => f.id !== fileId));

@@ -1,15 +1,13 @@
 import type {Request, Response, NextFunction} from "express";
 import { ArcjetNodeRequest } from "@arcjet/node";
 import { slidingWindow } from 'arcjet';
-import { fromNodeHeaders } from 'better-auth/node';
 
 import aj from '../config/arcjet.js';
-import { auth } from '../lib/auth.js';
 
 const securityMiddleware = async (req: Request, res: Response, next: NextFunction) => {
     if (process.env.NODE_ENV === 'test') return next();
 
-    // When behind the gateway, JWT is already validated and user identity is injected as headers
+    // All requests must arrive through the gateway, which validates the JWT and injects these headers
     const gatewayUserId = req.headers['x-user-id'];
     const gatewayUserRole = req.headers['x-user-role'];
     if (gatewayUserId && gatewayUserRole) {
@@ -20,60 +18,44 @@ const securityMiddleware = async (req: Request, res: Response, next: NextFunctio
         };
     }
 
-    // Fall back to better-auth session cookie for direct (non-gateway) access
     if (!req.user) {
-        try {
-            const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
-            if (session?.user) {
-                req.user = {
-                    id: session.user.id,
-                    role: ((session.user as any).role as UserRoles) ?? 'student',
-                    email: session.user.email,
-                };
-            }
-        } catch {
-            // No valid session — req.user stays undefined
-        }
-    }
-
-    if (process.env.NODE_ENV === 'production' && !req.user) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
 
 try{
-    const role: RateLimitRole = req.user?.role ?? 'guest';
+    const role: RateLimitRole = req.user.role;
 
     let limit: number; let message: string;
-    
+
     switch (role) {
-        case 'admin': 
+        case 'admin':
             limit=100;
-            message = 'Admin request limit exceeded (20 per minute). Slow down';
+            message = 'Admin request limit exceeded (100 per minute). Slow down';
             break;
         case 'teacher':
             limit=40;
-            message = 'User request limit exceeded (10 per minute). Please wait.';
+            message = 'Teacher request limit exceeded (40 per minute). Please wait.';
             break;
-        case'student':
+        case 'student':
             limit=30;
-            message = 'User request limit exceeded (10 per minute). Please wait.';
+            message = 'Student request limit exceeded (30 per minute). Please wait.';
             break;
         default:
             limit=15;
-            message = 'Guest request limit exceeded (5 per minute). Please sign up for higher limits.';
+            message = 'Request limit exceeded. Please wait.';
             break;
     }
 
     const client = aj.withRule(
         slidingWindow({
-            mode: 'LIVE', 
+            mode: 'LIVE',
             interval: '1m',
             max: limit,
     })
     )
 
     const arcjetRequest: ArcjetNodeRequest = {
-        headers: req.headers, 
+        headers: req.headers,
         method: req.method,
         url: req.originalUrl ?? req.url,
         socket: { remoteAddress: req.socket.remoteAddress ?? req.ip ?? '0.0.0.0'},
@@ -87,14 +69,12 @@ try{
         return res.status(403).json({ error: 'Forbidden', message: 'Request blocked by security policy.'});
     }
     if(decision.isDenied() && decision.reason.isRateLimit()) {
-        return res.status(429).json({ error: 'Forbidden', message});
+        return res.status(429).json({ error: 'Too Many Requests', message});
     }
     return next();
 } catch (e) {
     console.error('Arcjet middleware error: ', e);
-
     return res.status(500).json({ error: 'Internal error', message: 'Something went wrong with security middleware' });
-    
 }
 }
 

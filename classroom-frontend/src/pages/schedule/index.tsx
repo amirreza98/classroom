@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { authHeader } from "@/lib/token";
 import { useNavigate } from "react-router";
 import { useSession } from "@/lib/auth-client";
 import { ListView } from "@/components/refine-ui/views/list-view";
@@ -39,20 +40,21 @@ export default function SchedulePage() {
             setLoading(true);
             setError(null);
             try {
+                const hdrs = await authHeader();
                 if (userRole === 'admin') {
-                    const res = await fetch(`${BASE_URL}classes?limit=100`, { credentials: "include" });
+                    const res = await fetch(`${BASE_URL}classes?limit=100`, { headers: hdrs });
                     if (!res.ok) throw new Error("Failed to fetch classes");
                     const data: { data: ClassDetails[] } = await res.json();
                     setAllClasses(data.data ?? []);
                 } else if (userRole === 'teacher') {
-                    const res = await fetch(`${BASE_URL}classes?limit=100`, { credentials: "include" });
+                    const res = await fetch(`${BASE_URL}classes?limit=100`, { headers: hdrs });
                     if (!res.ok) throw new Error("Failed to fetch classes");
                     const data: { data: ClassDetails[] } = await res.json();
                     setAllClasses((data.data ?? []).filter(c => c.teacherId === session.user.id));
                 } else {
                     const enrollRes = await fetch(
                         `${BASE_URL}/enrollments?studentId=${session.user.id}`,
-                        { credentials: "include" }
+                        { headers: hdrs }
                     );
                     if (!enrollRes.ok) throw new Error("Failed to fetch enrollments");
                     const enrollData: { data: Enrollment[] } = await enrollRes.json();
@@ -62,7 +64,7 @@ export default function SchedulePage() {
                         enrollments.map(async (enrollment) => {
                             const classRes = await fetch(
                                 `${BASE_URL}classes/${enrollment.classId}`,
-                                { credentials: "include" }
+                                { headers: hdrs }
                             );
                             if (!classRes.ok) return null;
                             const classData: { data: ClassDetails } = await classRes.json();
@@ -85,9 +87,10 @@ export default function SchedulePage() {
     useEffect(() => {
         if (userRole !== 'admin') return;
         const fetchMeta = async () => {
+            const hdrs = await authHeader();
             const [deptRes, subjectRes] = await Promise.all([
-                fetch(`${BASE_URL}departments?limit=100`, { credentials: "include" }),
-                fetch(`${BASE_URL}subjects?limit=100`, { credentials: "include" }),
+                fetch(`${BASE_URL}departments?limit=100`, { headers: hdrs }),
+                fetch(`${BASE_URL}subjects?limit=100`, { headers: hdrs }),
             ]);
             if (deptRes.ok) setDepartments((await deptRes.json()).data ?? []);
             if (subjectRes.ok) setSubjects((await subjectRes.json()).data ?? []);

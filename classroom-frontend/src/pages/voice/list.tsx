@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { authHeader } from "@/lib/token";
 import { useNavigate } from "react-router";
 import { useSession } from "@/lib/auth-client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { BookOpen, Plus, Loader2, Headphones, Trash2 } from "lucide-react";
 
-const VOICE_SERVICE_URL = import.meta.env.VITE_VOICE_SERVICE_URL;
+const BOOKS_API = `${import.meta.env.VITE_BACKEND_BASE_URL}books`;
 
 type Book = {
   _id: string;
@@ -36,9 +37,9 @@ export default function VoiceList() {
     if (!session?.user) return;
     setDeletingId(bookId);
     try {
-      await fetch(`${VOICE_SERVICE_URL}/api/books/${bookId}`, {
+      await fetch(`${BOOKS_API}/${bookId}`, {
         method: "DELETE",
-        headers: { "x-user-id": session.user.id },
+        headers: await authHeader(),
       });
       fetchBooks();
     } catch (err) {
@@ -51,8 +52,8 @@ export default function VoiceList() {
   const fetchBooks = async () => {
     if (!session?.user) return;
     try {
-      const res = await fetch(`${VOICE_SERVICE_URL}/api/books`, {
-        headers: { "x-user-id": session.user.id },
+      const res = await fetch(BOOKS_API, {
+        headers: await authHeader(),
       });
       const data = await res.json();
       setBooks(data);
@@ -90,9 +91,9 @@ export default function VoiceList() {
     if (coverFile) formData.append("cover", coverFile);
 
     try {
-      const res = await fetch(`${VOICE_SERVICE_URL}/api/books`, {
+      const res = await fetch(BOOKS_API, {
         method: "POST",
-        headers: { "x-user-id": session.user.id },
+        headers: await authHeader(),
         body: formData,
       });
 

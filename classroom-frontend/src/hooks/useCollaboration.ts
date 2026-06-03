@@ -1,5 +1,6 @@
 import * as Y from 'yjs';
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { authHeader } from '@/lib/token';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 
@@ -21,8 +22,7 @@ export function useCollaboration(classId: string, fileId: string) {
             try {
                 await fetch(`${BACKEND_URL}collaboration/files/${fileId}/state`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
+                    headers: { ...(await authHeader()), 'Content-Type': 'application/json' },
                     body: JSON.stringify({ state: Array.from(state) }),
                 });
             } catch {
@@ -46,7 +46,7 @@ export function useCollaboration(classId: string, fileId: string) {
                 // Load persisted state from backend
                 try {
                     const res = await fetch(`${BACKEND_URL}collaboration/files/${fileId}/state`, {
-                        credentials: 'include',
+                        headers: await authHeader(),
                     });
                     if (res.ok) {
                         const data = await res.json();
