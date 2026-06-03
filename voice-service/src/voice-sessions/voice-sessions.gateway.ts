@@ -55,8 +55,12 @@ export class VoiceSessionsGateway implements OnGatewayDisconnect {
       const { bookId } = data;
       // Prefer gateway-injected header over client-supplied payload
       const userId =
-        (client.handshake.headers['x-user-id'] as string | undefined) ||
+        (client.handshake.headers['x-user-id'] as string | undefined) ??
         data.userId;
+      if (!userId) {
+        client.emit('error', { message: 'Unauthorized' });
+        return;
+      }
       console.log('start-session received:', bookId, userId);
 
       const session = await this.voiceSessionsService.createSession(bookId, userId);
