@@ -209,5 +209,5 @@ jobs:
             sed -i 's|build: ./collaboration-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-collaboration-service:latest|g' docker-compose.yml
             docker compose pull
             docker compose up -d --force-recreate
-            sleep 20
+            sleep 15
             docker exec backend npx drizzle-kit migrate

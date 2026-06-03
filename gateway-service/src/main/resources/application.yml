@@ -42,10 +42,12 @@ spring:
           predicates:
             - Path=/api/notifications/**
 
-        - id: collaboration-service
+        - id: collaboration-websocket
           uri: ${COLLABORATION_SERVICE_URL:http://localhost:8083}
           predicates:
-            - Path=/api/collaboration/**
+            - Path=/ws/collaboration/**
+          filters:
+            - RewritePath=/ws/(?<rest>.*), /${rest}
 
         # Catch-all for the Express CRUD backend — must be last
         - id: crud-service
