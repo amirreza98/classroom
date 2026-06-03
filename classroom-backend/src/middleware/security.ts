@@ -1,12 +1,13 @@
 import type {Request, Response, NextFunction} from "express";
 import { ArcjetNodeRequest } from "@arcjet/node";
-import { slidingWindow } from 'arcjet';  
+import { slidingWindow } from 'arcjet';
+import { fromNodeHeaders } from 'better-auth/node';
 
-import aj from '../config/arcjet.js' 
+import aj from '../config/arcjet.js';
+import { auth } from '../lib/auth.js';
 
 const securityMiddleware = async (req: Request, res: Response, next: NextFunction) => {
     if (process.env.NODE_ENV === 'test') return next();
-    if (process.env.NODE_ENV === 'development') return next();
 
     // When behind the gateway, JWT is already validated and user identity is injected as headers
     const gatewayUserId = req.headers['x-user-id'];
@@ -19,8 +20,24 @@ const securityMiddleware = async (req: Request, res: Response, next: NextFunctio
         };
     }
 
+    // Fall back to better-auth session cookie for direct (non-gateway) access
+    if (!req.user) {
+        try {
+            const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
+            if (session?.user) {
+                req.user = {
+                    id: session.user.id,
+                    role: ((session.user as any).role as UserRoles) ?? 'student',
+                    email: session.user.email,
+                };
+            }
+        } catch {
+            // No valid session — req.user stays undefined
+        }
+    }
+
     if (process.env.NODE_ENV === 'production' && !req.user) {
-        return res.status(401).json({ error: 'Unauthorized', message: 'Direct backend access is not allowed' });
+        return res.status(401).json({ error: 'Unauthorized' });
     }
 
 try{
