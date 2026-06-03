@@ -23,6 +23,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         log.info("Registering WebSocket endpoint at /collaboration");
         registry.addEndpoint("/collaboration")
                 .setAllowedOriginPatterns("*")
+                .addInterceptors(new GatewayHandshakeInterceptor())
                 .withSockJS();
     }
 }

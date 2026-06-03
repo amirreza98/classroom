@@ -47,12 +47,16 @@ export class VoiceSessionsGateway implements OnGatewayDisconnect {
   @SubscribeMessage('start-session')
   async handleStartSession(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { bookId: string; userId: string },
+    @MessageBody() data: { bookId: string; userId?: string },
   ) {
     console.log('EVENT RECEIVED');
 
     try {
-      const { bookId, userId } = data;
+      const { bookId } = data;
+      // Prefer gateway-injected header over client-supplied payload
+      const userId =
+        (client.handshake.headers['x-user-id'] as string | undefined) ||
+        data.userId;
       console.log('start-session received:', bookId, userId);
 
       const session = await this.voiceSessionsService.createSession(bookId, userId);

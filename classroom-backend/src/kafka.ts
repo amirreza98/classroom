@@ -6,3 +6,12 @@ const kafka = new Kafka({
 });
 
 export const producer = kafka.producer();
+
+(async () => {
+  try {
+    await producer.connect();
+    console.log('Kafka producer connected');
+  } catch (err) {
+    console.error('Kafka producer connection failed (non-fatal):', err);
+  }
+})();

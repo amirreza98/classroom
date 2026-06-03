@@ -14,7 +14,7 @@ import dashboardRouter from './routes/dashboard.js';
 import collaborationRouter from './routes/collaboration.js';
 import securityMiddleware from './middleware/security.js';
 import { auth } from './lib/auth.js';
-import {producer} from "./kafka.js"
+import "./kafka.js"
 
 const app = express();
 const PORT = 8000;
@@ -50,14 +50,6 @@ app.get('/', (req, res) => {
     res.send('Hello, welcome to the Classroom');
 });
 
-producer.connect()
-  .then(() => {
-    console.log('Kafka producer connected');
-    app.listen(PORT, () => {
-      console.log(`Server is running at http://localhost:${PORT}`);
-    });
-  })
-  .catch((err) => {
-    console.error('Failed to connect Kafka producer:', err);
-    process.exit(1);
-  });
+app.listen(PORT, () => {
+  console.log(`Server is running at http://localhost:${PORT}`);
+});

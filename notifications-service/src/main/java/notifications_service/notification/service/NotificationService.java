@@ -20,6 +20,10 @@ public class NotificationService {
         return repository.findAll();
     }
 
+    public List<Notification> getByRecipientEmail(String email) {
+        return repository.findByRecipientEmail(email);
+    }
+
     public Notification getById(Long id){
         return repository.findById(id)
                 .orElseThrow(() -> new NotificationNotFoundException(id));
