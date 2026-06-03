@@ -27,10 +27,22 @@ if (!FRONTEND_URL) {
 const allowedOrigins = FRONTEND_URL.split(',').map(o => o.trim());
 
 app.use(cors({
-    origin: allowedOrigins,  // ✅ cors handles arrays correctly
+    origin: allowedOrigins,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
 }));
+
+// Spring Cloud Gateway appends its own hop to X-Forwarded-Proto, producing
+// "https,http" or "http,http". better-call uses the raw header value as the
+// URL scheme, which makes new Request() throw on the comma. Take only the
+// first (outermost / client-facing) value before better-auth reads it.
+app.use((req, _res, next) => {
+    const proto = req.headers['x-forwarded-proto'];
+    if (typeof proto === 'string' && proto.includes(',')) {
+        req.headers['x-forwarded-proto'] = proto.split(',')[0].trim();
+    }
+    next();
+});
 
 app.all('/api/auth/*splat', toNodeHandler(auth));
 
