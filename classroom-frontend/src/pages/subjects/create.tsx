@@ -20,7 +20,7 @@ const SubjectsCreate = () => {
 
     const form = useForm<z.infer<typeof subjectSchema>>({
         resolver: zodResolver(subjectSchema),
-        defaultValues: { name: "", code: "", description: "", departmentId: 0 },
+        defaultValues: { name: "", code: "", description: "", departmentId: 0, price: 0 },
     });
 
     const { refineCore: { onFinish }, handleSubmit, formState: { isSubmitting }, control } = form;
@@ -83,6 +83,13 @@ const SubjectsCreate = () => {
                                                 ))}
                                             </SelectContent>
                                         </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )} />
+                                <FormField control={control} name="price" render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Enrollment Price (USD)</FormLabel>
+                                        <FormControl><Input type="number" min="0" step="0.01" placeholder="0.00" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl>
                                         <FormMessage />
                                     </FormItem>
                                 )} />

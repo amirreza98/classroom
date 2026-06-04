@@ -59,6 +59,8 @@ services:
       - ./classroom-backend/.env
     environment:
       KAFKA_BROKER: kafka:9092
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
     depends_on:
       - kafka
       - redis
@@ -73,6 +75,7 @@ services:
     environment:
       SERVER_PORT: 8081
       KAFKA_BROKER: kafka:9092
+      DATABASE_URL: ${ANALYTICS_DATABASE_URL}
     depends_on:
       - kafka
     networks:

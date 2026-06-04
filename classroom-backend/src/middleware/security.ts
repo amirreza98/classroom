@@ -5,7 +5,18 @@ import { slidingWindow } from 'arcjet';
 import aj from '../config/arcjet.js';
 
 const securityMiddleware = async (req: Request, res: Response, next: NextFunction) => {
-    if (process.env.NODE_ENV === 'test') return next();
+    if (process.env.NODE_ENV === 'test') {
+        const id = req.headers['x-user-id'];
+        const role = req.headers['x-user-role'];
+        if (id && role) {
+            req.user = {
+                id: String(id),
+                role: role as 'admin' | 'teacher' | 'student',
+                email: String(req.headers['x-user-email'] ?? ''),
+            };
+        }
+        return next();
+    }
 
     // All requests must arrive through the gateway, which validates the JWT and injects these headers
     const gatewayUserId = req.headers['x-user-id'];

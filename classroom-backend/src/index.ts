@@ -12,6 +12,10 @@ import departmentsRouter from './routes/departments.js';
 import enrollmentsRouter from './routes/enrollments.js';
 import dashboardRouter from './routes/dashboard.js';
 import collaborationRouter from './routes/collaboration.js';
+import paymentsRouter from './routes/payments.js';
+import chatRouter from './routes/chat.js';
+import studentDashboardRouter from './routes/student-dashboard.js';
+import { stripeWebhookHandler } from './routes/stripe-webhook.js';
 import securityMiddleware from './middleware/security.js';
 import { auth } from './lib/auth.js';
 import "./kafka.js"
@@ -46,6 +50,9 @@ app.use((req, _res, next) => {
 
 app.all('/api/auth/*splat', toNodeHandler(auth));
 
+// Stripe webhook must use raw body — register before express.json()
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), stripeWebhookHandler);
+
 app.use(express.json());
 
 app.use(securityMiddleware);
@@ -57,6 +64,9 @@ app.use('/api/departments', departmentsRouter);
 app.use('/api/enrollments', enrollmentsRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/collaboration', collaborationRouter);
+app.use('/api/payments', paymentsRouter);
+app.use('/api/chat', chatRouter);
+app.use('/api/student-dashboard', studentDashboardRouter);
 
 app.get('/', (req, res) => {
     res.send('Hello, welcome to the Classroom');

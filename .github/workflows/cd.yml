@@ -1,12 +1,29 @@
-name: Build and Deploy
+name: CD
 
 on:
-  push:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
     branches:
       - main
 
+# Prevent concurrent deployments
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
+  # Only proceed when CI passed
+  guard:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - run: echo "CI passed — proceeding with deployment"
+
   detect-changes:
+    needs: guard
     runs-on: ubuntu-latest
     outputs:
       backend: ${{ steps.changes.outputs.backend }}
@@ -16,10 +33,10 @@ jobs:
       notifications: ${{ steps.changes.outputs.notifications }}
       collaboration: ${{ steps.changes.outputs.collaboration }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 2
-      - uses: dorny/paths-filter@v2
+      - uses: dorny/paths-filter@v3
         id: changes
         with:
           filters: |
@@ -36,12 +53,14 @@ jobs:
             collaboration:
               - 'collaboration-service/**'
 
+  # ── Docker build & push ──────────────────────────────────────────────────────
+
   build-and-push-backend:
     needs: detect-changes
     if: needs.detect-changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -59,11 +78,12 @@ jobs:
     if: needs.detect-changes.outputs.gateway == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-java@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
+          cache: 'maven'
       - run: cd gateway-service && ./mvnw clean package -DskipTests
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -82,7 +102,7 @@ jobs:
     if: needs.detect-changes.outputs.voice == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -100,11 +120,12 @@ jobs:
     if: needs.detect-changes.outputs.analytics == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-java@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
+          cache: 'maven'
       - run: cd analytics-service && ./mvnw clean package -DskipTests
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -123,11 +144,12 @@ jobs:
     if: needs.detect-changes.outputs.notifications == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-java@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
+          cache: 'maven'
       - run: cd notifications-service && ./mvnw clean package -DskipTests
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -146,11 +168,12 @@ jobs:
     if: needs.detect-changes.outputs.collaboration == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-java@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
+          cache: 'maven'
       - run: cd collaboration-service && ./mvnw clean package -DskipTests
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -163,6 +186,8 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           tags: ${{ secrets.DOCKER_USERNAME }}/classroom-collaboration-service:latest
+
+  # ── Deploy to EC2 ────────────────────────────────────────────────────────────
 
   deploy-to-ec2:
     runs-on: ubuntu-latest
@@ -183,7 +208,7 @@ jobs:
         needs.build-and-push-collaboration-service.result == 'success'
       )
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Copy docker-compose to EC2
         uses: appleboy/scp-action@v0.1.7
         with:

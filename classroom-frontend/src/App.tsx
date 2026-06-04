@@ -38,15 +38,28 @@ import DepartmentsShow from "@/pages/departments/show";
 import VoiceList from "./pages/voice/list";
 import VoiceConversation from "./pages/voice/conversation";
 import SchedulePage from "./pages/schedule";
+import ProfilePage from "./pages/profile";
+import SubjectChatPage from "./pages/subjects/chat";
+import PaymentSuccessPage from "./pages/payment/success";
+import PaymentCancelPage from "./pages/payment/cancel";
 
-import { Home, BookOpen, GraduationCap, Users, Building2, Headphones, CalendarDays } from "lucide-react";
+import { Home, BookOpen, GraduationCap, Users, Building2, Headphones, CalendarDays, UserCircle } from "lucide-react";
 import { AuthGuard } from "./components/auth-guard";
 import Login from "./pages/login";
 import Register from "./pages/register";
 import { lazy } from "react";
 import { RoleGuard } from "./components/role-guard";
+import { useSession } from "./lib/auth-client";
 
 const Dashboard = lazy(() => import("./pages/dashboard"))
+const StudentDashboard = lazy(() => import("./pages/student-dashboard"))
+
+function DashboardRouter() {
+  const { data: session } = useSession();
+  const role = (session?.user as any)?.role;
+  if (role === 'student') return <StudentDashboard />;
+  return <Dashboard />;
+}
 
 
 function App() {
@@ -112,6 +125,11 @@ function App() {
                   list: '/schedule',
                   meta: { label: 'My Schedule', icon: <CalendarDays /> }
                 },
+                {
+                  name: 'profile',
+                  list: '/profile',
+                  meta: { label: 'My Profile', icon: <UserCircle /> }
+                },
               ]}
             >
               <Routes>
@@ -119,8 +137,13 @@ function App() {
                 <Route path="/register" element={<Register />} />
 
                 <Route element={<AuthGuard><Layout><Outlet /></Layout></AuthGuard>}>
-                  
+
                   {/* Everyone */}
+                  <Route path="/" element={<DashboardRouter />} />
+                  <Route path="profile" element={<ProfilePage />} />
+                  <Route path="payment/success" element={<PaymentSuccessPage />} />
+                  <Route path="payment/cancel" element={<PaymentCancelPage />} />
+                  <Route path="subjects/:subjectId/chat" element={<SubjectChatPage />} />
                   <Route path="schedule">
                     <Route index element={<SchedulePage />} />
                     <Route path="class/:classId" element={<CollaboratePage />} />
@@ -136,7 +159,7 @@ function App() {
 
                   {/* Teacher + Admin */}
                   <Route element={<RoleGuard allowedRoles={['teacher', 'admin']} />}>
-                    <Route path="/" element={<Dashboard />} />
+                    <Route path="dashboard" element={<Dashboard />} />
 
                     <Route path="classes">
                       <Route index element={<ClassesList />} />

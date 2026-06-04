@@ -1,8 +1,11 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { jwt } from "better-auth/plugins";
+import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
-import * as schema from '../db/schema/auth.js'
+import * as schema from '../db/schema/auth.js';
+import { user } from '../db/schema/auth.js';
+import { publishEvent } from '../kafka.js';
 
 const secret = process.env.BETTER_AUTH_SECRET;
 if (!secret) throw new Error("BETTER_AUTH_SECRET environment variable is required");
@@ -36,6 +39,26 @@ export const auth = betterAuth({
                 type: 'string', required: false, input: true,
             },
         }
+    },
+    databaseHooks: {
+        session: {
+            create: {
+                after: async (session) => {
+                    try {
+                        const [u] = await db.select({ role: user.role }).from(user).where(eq(user.id, session.userId));
+                        if (u?.role === 'student') {
+                            publishEvent('student.actions', {
+                                event: 'student.login',
+                                studentId: session.userId,
+                                timestamp: new Date().toISOString(),
+                            });
+                        }
+                    } catch {
+                        // non-fatal
+                    }
+                },
+            },
+        },
     },
     plugins: [
         jwt({

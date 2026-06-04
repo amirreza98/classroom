@@ -33,6 +33,7 @@ export const subjectSchema = z.object({
     departmentId: z.coerce
         .number({ required_error: "Department is required", invalid_type_error: "Department is required" })
         .min(1, "Department is required"),
+    price: z.coerce.number().min(0, "Price must be non-negative").optional().default(0),
 });
 
 const scheduleSchema = z.object({
@@ -72,4 +73,14 @@ export const enrollmentSchema = z.object({
         .number({ required_error: "Class ID is required", invalid_type_error: "Class ID is required" })
         .min(1, "Class ID is required"),
     studentId: z.string().min(1, "Student ID is required"),
+});
+
+export const profileSchema = z.object({
+    name: z.string().min(2, "Name must be at least 2 characters"),
+    image: z.string().optional(),
+    imageCldPubId: z.string().optional(),
+});
+
+export const chatMessageSchema = z.object({
+    content: z.string().min(1, "Message cannot be empty").max(2000, "Message too long"),
 });

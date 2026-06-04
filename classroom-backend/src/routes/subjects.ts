@@ -96,14 +96,14 @@ router.post("/", async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
     try {
-        const { name, code, description, departmentId } = req.body;
+        const { name, code, description, departmentId, price } = req.body;
         if (!name || !code || !departmentId) {
             return res.status(400).json({ error: 'name, code, and departmentId are required' });
         }
 
         const [created] = await db
             .insert(subjects)
-            .values({ name, code, description, departmentId: Number(departmentId) })
+            .values({ name, code, description, departmentId: Number(departmentId), price: price != null ? String(Number(price)) : '0' })
             .returning();
 
         res.status(201).json({ data: created });
@@ -122,7 +122,7 @@ router.put("/:id", async (req, res) => {
         const subjectId = Number(req.params.id);
         if (!Number.isFinite(subjectId)) return res.status(400).json({ error: 'Invalid subject ID' });
 
-        const { name, code, description, departmentId } = req.body;
+        const { name, code, description, departmentId, price } = req.body;
 
         const [updated] = await db
             .update(subjects)
@@ -131,6 +131,7 @@ router.put("/:id", async (req, res) => {
                 code,
                 description,
                 departmentId: departmentId ? Number(departmentId) : undefined,
+                price: price != null ? String(Number(price)) : undefined,
             })
             .where(eq(subjects.id, subjectId))
             .returning();

@@ -36,7 +36,7 @@ public class SecurityConfig {
     @Order(1)
     public SecurityWebFilterChain authRouteChain(ServerHttpSecurity http) {
         return http
-                .securityMatcher(ServerWebExchangeMatchers.pathMatchers("/api/auth/**"))
+                .securityMatcher(ServerWebExchangeMatchers.pathMatchers("/api/auth/**", "/api/stripe/webhook"))
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .authorizeExchange(ex -> ex.anyExchange().permitAll())
                 .build();
