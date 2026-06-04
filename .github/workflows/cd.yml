@@ -8,30 +8,29 @@ on:
       - completed
     branches:
       - main
+  workflow_dispatch:
 
-# Prevent concurrent deployments
 concurrency:
   group: deploy-production
   cancel-in-progress: false
 
 jobs:
-  # Only proceed when CI passed
   guard:
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success'
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
     steps:
-      - run: echo "CI passed — proceeding with deployment"
+      - run: echo "Proceeding with deployment"
 
   detect-changes:
     needs: guard
     runs-on: ubuntu-latest
     outputs:
-      backend: ${{ steps.changes.outputs.backend }}
-      gateway: ${{ steps.changes.outputs.gateway }}
-      voice: ${{ steps.changes.outputs.voice }}
-      analytics: ${{ steps.changes.outputs.analytics }}
-      notifications: ${{ steps.changes.outputs.notifications }}
-      collaboration: ${{ steps.changes.outputs.collaboration }}
+      backend: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.backend }}
+      gateway: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.gateway }}
+      voice: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.voice }}
+      analytics: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.analytics }}
+      notifications: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.notifications }}
+      collaboration: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.collaboration }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,8 +51,6 @@ jobs:
               - 'notifications-service/**'
             collaboration:
               - 'collaboration-service/**'
-
-  # ── Docker build & push ──────────────────────────────────────────────────────
 
   build-and-push-backend:
     needs: detect-changes
@@ -186,8 +183,6 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           tags: ${{ secrets.DOCKER_USERNAME }}/classroom-collaboration-service:latest
-
-  # ── Deploy to EC2 ────────────────────────────────────────────────────────────
 
   deploy-to-ec2:
     runs-on: ubuntu-latest
