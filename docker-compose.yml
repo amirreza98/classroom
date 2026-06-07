@@ -35,7 +35,7 @@ services:
       - "8080:8080"
     environment:
       SERVER_PORT: 8080
-      AUTH_SERVICE_URL: http://auth-service:8000
+      EXPRESS_SERVICE_URL: http://auth-service:8000
       ACADEMIC_SERVICE_URL: http://academic-service:8001
       VOICE_SERVICE_URL: http://voice-service:3001
       NOTIFICATION_SERVICE_URL: http://notifications-service:8082
@@ -51,12 +51,12 @@ services:
       - classroom-network
 
   auth-service:
-    build: ./auth-service
+    build: ./classroom-backend
     container_name: auth-service
     ports:
       - "8000:8000"
     env_file:
-      - ./auth-service/.env
+      - ./classroom-backend/.env
     environment:
       KAFKA_BROKER: kafka:9092
     depends_on:
@@ -70,11 +70,14 @@ services:
     container_name: academic-service
     ports:
       - "8001:8001"
-    env_file:
-      - ./academic-service/.env
     environment:
+      SERVER_PORT: 8001
       KAFKA_BROKER: kafka:9092
       AUTH_SERVICE_URL: http://auth-service:8000
+      ACADEMIC_DATABASE_URL: ${ACADEMIC_DATABASE_URL}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      FRONTEND_URL: ${FRONTEND_URL}
     depends_on:
       - kafka
       - redis
