@@ -1,247 +1,498 @@
 name: CD
 
+# Triggers:
+#   1. Automatically after CI passes on main
+#   2. Manually — use force_rebuild: true to rebuild all images regardless of cache
 on:
   workflow_run:
-    workflows:
-      - CI
-    types:
-      - completed
-    branches:
-      - main
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Rebuild all images even if unchanged (bypasses cache)'
+        type: boolean
+        default: false
 
 concurrency:
   group: deploy-production
   cancel-in-progress: false
+
+# ── How image caching works ──────────────────────────────────────────────────
+#
+#  Each build job computes the git tree-hash of its service directory:
+#    tree_hash = git rev-parse HEAD:<service-dir>
+#
+#  This hash is stable: identical directory contents → identical hash,
+#  regardless of commit SHA. It changes only when files inside that
+#  directory actually change.
+#
+#  Before building, the job checks whether an image already exists in
+#  Docker Hub with the tag `tree-<hash>`. If yes → skip build (nothing
+#  changed AND the last build succeeded). If no → build (either first
+#  time, or the previous attempt for this tree state failed → auto-retry).
+#
+#  Images are tagged:
+#    - `tree-<hash>`  → cache sentinel (never deployed, just existence check)
+#    - `latest`       → what EC2 actually pulls
+# ─────────────────────────────────────────────────────────────────────────────
 
 jobs:
   guard:
     runs-on: ubuntu-latest
     if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
     steps:
-      - run: echo "Proceeding with deployment"
+      - run: echo "CI passed — proceeding with deployment"
 
-  detect-changes:
+  # ── Build jobs (all run in parallel, independent failures) ──────────────────
+
+  build-auth-service:
     needs: guard
     runs-on: ubuntu-latest
     outputs:
-      auth:         ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.auth }}
-      academic:     ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.academic }}
-      gateway:      ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.gateway }}
-      voice:        ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.voice }}
-      analytics:    ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.analytics }}
-      notifications: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.notifications }}
-      collaboration: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.collaboration }}
+      built: ${{ steps.decide.outputs.built }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-      - uses: dorny/paths-filter@v3
-        id: changes
-        with:
-          filters: |
-            auth:
-              - 'auth-service/**'
-            academic:
-              - 'academic-service/**'
-            gateway:
-              - 'gateway-service/**'
-            voice:
-              - 'voice-service/**'
-            analytics:
-              - 'analytics-service/**'
-            notifications:
-              - 'notifications-service/**'
-            collaboration:
-              - 'collaboration-service/**'
 
-  build-and-push-auth-service:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.auth == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - name: Compute tree hash
+        id: hash
+        run: echo "value=$(git rev-parse HEAD:auth-service)" >> $GITHUB_OUTPUT
+
       - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Check if image exists for this tree state
+        id: check
+        run: |
+          if docker manifest inspect ${{ secrets.DOCKER_USERNAME }}/classroom-auth-service:tree-${{ steps.hash.outputs.value }} 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Decide whether to build
+        id: decide
+        run: |
+          if [[ "${{ steps.check.outputs.exists }}" == "false" || "${{ inputs.force_rebuild }}" == "true" ]]; then
+            echo "built=true" >> $GITHUB_OUTPUT
+            echo "Building: image not found for tree ${{ steps.hash.outputs.value }} or force_rebuild set"
+          else
+            echo "built=false" >> $GITHUB_OUTPUT
+            echo "Skipping: image already exists for tree ${{ steps.hash.outputs.value }}"
+          fi
+
+      - uses: docker/setup-buildx-action@v3
+        if: steps.decide.outputs.built == 'true'
+
       - uses: docker/build-push-action@v5
+        if: steps.decide.outputs.built == 'true'
         with:
           context: ./auth-service
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ${{ secrets.DOCKER_USERNAME }}/classroom-auth-service:latest
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/classroom-auth-service:latest
+            ${{ secrets.DOCKER_USERNAME }}/classroom-auth-service:tree-${{ steps.hash.outputs.value }}
+          cache-from: type=gha,scope=auth-service
+          cache-to: type=gha,scope=auth-service,mode=max
 
-  build-and-push-academic-service:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.academic == 'true'
+  build-academic-service:
+    needs: guard
     runs-on: ubuntu-latest
+    outputs:
+      built: ${{ steps.decide.outputs.built }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: 'maven'
-      - run: cd academic-service && mvn clean package -DskipTests
-      - uses: docker/setup-buildx-action@v3
+
+      - name: Compute tree hash
+        id: hash
+        run: echo "value=$(git rev-parse HEAD:academic-service)" >> $GITHUB_OUTPUT
+
       - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Check if image exists for this tree state
+        id: check
+        run: |
+          if docker manifest inspect ${{ secrets.DOCKER_USERNAME }}/classroom-academic-service:tree-${{ steps.hash.outputs.value }} 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Decide whether to build
+        id: decide
+        run: |
+          if [[ "${{ steps.check.outputs.exists }}" == "false" || "${{ inputs.force_rebuild }}" == "true" ]]; then
+            echo "built=true" >> $GITHUB_OUTPUT
+          else
+            echo "built=false" >> $GITHUB_OUTPUT
+            echo "Skipping: image already exists for tree ${{ steps.hash.outputs.value }}"
+          fi
+
+      - uses: actions/setup-java@v4
+        if: steps.decide.outputs.built == 'true'
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - uses: docker/setup-buildx-action@v3
+        if: steps.decide.outputs.built == 'true'
+
       - uses: docker/build-push-action@v5
+        if: steps.decide.outputs.built == 'true'
         with:
           context: ./academic-service
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ${{ secrets.DOCKER_USERNAME }}/classroom-academic-service:latest
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/classroom-academic-service:latest
+            ${{ secrets.DOCKER_USERNAME }}/classroom-academic-service:tree-${{ steps.hash.outputs.value }}
+          cache-from: type=gha,scope=academic-service
+          cache-to: type=gha,scope=academic-service,mode=max
 
-  build-and-push-gateway:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.gateway == 'true'
+  build-gateway:
+    needs: guard
     runs-on: ubuntu-latest
+    outputs:
+      built: ${{ steps.decide.outputs.built }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: 'maven'
-      - run: cd gateway-service && ./mvnw clean package -DskipTests
-      - uses: docker/setup-buildx-action@v3
+
+      - name: Compute tree hash
+        id: hash
+        run: echo "value=$(git rev-parse HEAD:gateway-service)" >> $GITHUB_OUTPUT
+
       - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Check if image exists for this tree state
+        id: check
+        run: |
+          if docker manifest inspect ${{ secrets.DOCKER_USERNAME }}/classroom-gateway-service:tree-${{ steps.hash.outputs.value }} 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Decide whether to build
+        id: decide
+        run: |
+          if [[ "${{ steps.check.outputs.exists }}" == "false" || "${{ inputs.force_rebuild }}" == "true" ]]; then
+            echo "built=true" >> $GITHUB_OUTPUT
+          else
+            echo "built=false" >> $GITHUB_OUTPUT
+            echo "Skipping: image already exists for tree ${{ steps.hash.outputs.value }}"
+          fi
+
+      - uses: actions/setup-java@v4
+        if: steps.decide.outputs.built == 'true'
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Build JAR
+        if: steps.decide.outputs.built == 'true'
+        run: cd gateway-service && ./mvnw clean package -DskipTests --batch-mode --no-transfer-progress
+
+      - uses: docker/setup-buildx-action@v3
+        if: steps.decide.outputs.built == 'true'
+
       - uses: docker/build-push-action@v5
+        if: steps.decide.outputs.built == 'true'
         with:
           context: ./gateway-service
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ${{ secrets.DOCKER_USERNAME }}/classroom-gateway-service:latest
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/classroom-gateway-service:latest
+            ${{ secrets.DOCKER_USERNAME }}/classroom-gateway-service:tree-${{ steps.hash.outputs.value }}
+          cache-from: type=gha,scope=gateway-service
+          cache-to: type=gha,scope=gateway-service,mode=max
 
-  build-and-push-voice-service:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.voice == 'true'
+  build-voice-service:
+    needs: guard
     runs-on: ubuntu-latest
+    outputs:
+      built: ${{ steps.decide.outputs.built }}
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+
+      - name: Compute tree hash
+        id: hash
+        run: echo "value=$(git rev-parse HEAD:voice-service)" >> $GITHUB_OUTPUT
+
       - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Check if image exists for this tree state
+        id: check
+        run: |
+          if docker manifest inspect ${{ secrets.DOCKER_USERNAME }}/classroom-voice-service:tree-${{ steps.hash.outputs.value }} 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Decide whether to build
+        id: decide
+        run: |
+          if [[ "${{ steps.check.outputs.exists }}" == "false" || "${{ inputs.force_rebuild }}" == "true" ]]; then
+            echo "built=true" >> $GITHUB_OUTPUT
+          else
+            echo "built=false" >> $GITHUB_OUTPUT
+            echo "Skipping: image already exists for tree ${{ steps.hash.outputs.value }}"
+          fi
+
+      - uses: docker/setup-buildx-action@v3
+        if: steps.decide.outputs.built == 'true'
+
       - uses: docker/build-push-action@v5
+        if: steps.decide.outputs.built == 'true'
         with:
           context: ./voice-service
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ${{ secrets.DOCKER_USERNAME }}/classroom-voice-service:latest
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/classroom-voice-service:latest
+            ${{ secrets.DOCKER_USERNAME }}/classroom-voice-service:tree-${{ steps.hash.outputs.value }}
+          cache-from: type=gha,scope=voice-service
+          cache-to: type=gha,scope=voice-service,mode=max
 
-  build-and-push-analytics-service:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.analytics == 'true'
+  build-analytics-service:
+    needs: guard
     runs-on: ubuntu-latest
+    outputs:
+      built: ${{ steps.decide.outputs.built }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: 'maven'
-      - run: cd analytics-service && ./mvnw clean package -DskipTests
-      - uses: docker/setup-buildx-action@v3
+
+      - name: Compute tree hash
+        id: hash
+        run: echo "value=$(git rev-parse HEAD:analytics-service)" >> $GITHUB_OUTPUT
+
       - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Check if image exists for this tree state
+        id: check
+        run: |
+          if docker manifest inspect ${{ secrets.DOCKER_USERNAME }}/classroom-analytics-service:tree-${{ steps.hash.outputs.value }} 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Decide whether to build
+        id: decide
+        run: |
+          if [[ "${{ steps.check.outputs.exists }}" == "false" || "${{ inputs.force_rebuild }}" == "true" ]]; then
+            echo "built=true" >> $GITHUB_OUTPUT
+          else
+            echo "built=false" >> $GITHUB_OUTPUT
+            echo "Skipping: image already exists for tree ${{ steps.hash.outputs.value }}"
+          fi
+
+      - uses: actions/setup-java@v4
+        if: steps.decide.outputs.built == 'true'
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Build JAR
+        if: steps.decide.outputs.built == 'true'
+        run: cd analytics-service && ./mvnw clean package -DskipTests --batch-mode --no-transfer-progress
+
+      - uses: docker/setup-buildx-action@v3
+        if: steps.decide.outputs.built == 'true'
+
       - uses: docker/build-push-action@v5
+        if: steps.decide.outputs.built == 'true'
         with:
           context: ./analytics-service
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ${{ secrets.DOCKER_USERNAME }}/classroom-analytics-service:latest
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/classroom-analytics-service:latest
+            ${{ secrets.DOCKER_USERNAME }}/classroom-analytics-service:tree-${{ steps.hash.outputs.value }}
+          cache-from: type=gha,scope=analytics-service
+          cache-to: type=gha,scope=analytics-service,mode=max
 
-  build-and-push-notifications-service:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.notifications == 'true'
+  build-notifications-service:
+    needs: guard
     runs-on: ubuntu-latest
+    outputs:
+      built: ${{ steps.decide.outputs.built }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: 'maven'
-      - run: cd notifications-service && ./mvnw clean package -DskipTests
-      - uses: docker/setup-buildx-action@v3
+
+      - name: Compute tree hash
+        id: hash
+        run: echo "value=$(git rev-parse HEAD:notifications-service)" >> $GITHUB_OUTPUT
+
       - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Check if image exists for this tree state
+        id: check
+        run: |
+          if docker manifest inspect ${{ secrets.DOCKER_USERNAME }}/classroom-notifications-service:tree-${{ steps.hash.outputs.value }} 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Decide whether to build
+        id: decide
+        run: |
+          if [[ "${{ steps.check.outputs.exists }}" == "false" || "${{ inputs.force_rebuild }}" == "true" ]]; then
+            echo "built=true" >> $GITHUB_OUTPUT
+          else
+            echo "built=false" >> $GITHUB_OUTPUT
+            echo "Skipping: image already exists for tree ${{ steps.hash.outputs.value }}"
+          fi
+
+      - uses: actions/setup-java@v4
+        if: steps.decide.outputs.built == 'true'
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Build JAR
+        if: steps.decide.outputs.built == 'true'
+        run: cd notifications-service && ./mvnw clean package -DskipTests --batch-mode --no-transfer-progress
+
+      - uses: docker/setup-buildx-action@v3
+        if: steps.decide.outputs.built == 'true'
+
       - uses: docker/build-push-action@v5
+        if: steps.decide.outputs.built == 'true'
         with:
           context: ./notifications-service
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ${{ secrets.DOCKER_USERNAME }}/classroom-notifications-service:latest
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/classroom-notifications-service:latest
+            ${{ secrets.DOCKER_USERNAME }}/classroom-notifications-service:tree-${{ steps.hash.outputs.value }}
+          cache-from: type=gha,scope=notifications-service
+          cache-to: type=gha,scope=notifications-service,mode=max
 
-  build-and-push-collaboration-service:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.collaboration == 'true'
+  build-collaboration-service:
+    needs: guard
     runs-on: ubuntu-latest
+    outputs:
+      built: ${{ steps.decide.outputs.built }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: 'maven'
-      - run: cd collaboration-service && ./mvnw clean package -DskipTests
-      - uses: docker/setup-buildx-action@v3
+
+      - name: Compute tree hash
+        id: hash
+        run: echo "value=$(git rev-parse HEAD:collaboration-service)" >> $GITHUB_OUTPUT
+
       - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Check if image exists for this tree state
+        id: check
+        run: |
+          if docker manifest inspect ${{ secrets.DOCKER_USERNAME }}/classroom-collaboration-service:tree-${{ steps.hash.outputs.value }} 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Decide whether to build
+        id: decide
+        run: |
+          if [[ "${{ steps.check.outputs.exists }}" == "false" || "${{ inputs.force_rebuild }}" == "true" ]]; then
+            echo "built=true" >> $GITHUB_OUTPUT
+          else
+            echo "built=false" >> $GITHUB_OUTPUT
+            echo "Skipping: image already exists for tree ${{ steps.hash.outputs.value }}"
+          fi
+
+      - uses: actions/setup-java@v4
+        if: steps.decide.outputs.built == 'true'
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Build JAR
+        if: steps.decide.outputs.built == 'true'
+        run: cd collaboration-service && ./mvnw clean package -DskipTests --batch-mode --no-transfer-progress
+
+      - uses: docker/setup-buildx-action@v3
+        if: steps.decide.outputs.built == 'true'
+
       - uses: docker/build-push-action@v5
+        if: steps.decide.outputs.built == 'true'
         with:
           context: ./collaboration-service
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ${{ secrets.DOCKER_USERNAME }}/classroom-collaboration-service:latest
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/classroom-collaboration-service:latest
+            ${{ secrets.DOCKER_USERNAME }}/classroom-collaboration-service:tree-${{ steps.hash.outputs.value }}
+          cache-from: type=gha,scope=collaboration-service
+          cache-to: type=gha,scope=collaboration-service,mode=max
+
+  # ── Deploy ───────────────────────────────────────────────────────────────────
+  # Runs if at least one build job succeeded (others may have been skipped or failed).
+  # Failed builds are left with their previous image on EC2 — safe to deploy the rest.
 
   deploy-to-ec2:
     runs-on: ubuntu-latest
     needs:
-      - build-and-push-auth-service
-      - build-and-push-academic-service
-      - build-and-push-gateway
-      - build-and-push-voice-service
-      - build-and-push-analytics-service
-      - build-and-push-notifications-service
-      - build-and-push-collaboration-service
+      - build-auth-service
+      - build-academic-service
+      - build-gateway
+      - build-voice-service
+      - build-analytics-service
+      - build-notifications-service
+      - build-collaboration-service
     if: |
       always() && (
-        needs.build-and-push-auth-service.result == 'success' ||
-        needs.build-and-push-academic-service.result == 'success' ||
-        needs.build-and-push-gateway.result == 'success' ||
-        needs.build-and-push-voice-service.result == 'success' ||
-        needs.build-and-push-analytics-service.result == 'success' ||
-        needs.build-and-push-notifications-service.result == 'success' ||
-        needs.build-and-push-collaboration-service.result == 'success'
+        needs.build-auth-service.result       == 'success' ||
+        needs.build-academic-service.result   == 'success' ||
+        needs.build-gateway.result            == 'success' ||
+        needs.build-voice-service.result      == 'success' ||
+        needs.build-analytics-service.result  == 'success' ||
+        needs.build-notifications-service.result == 'success' ||
+        needs.build-collaboration-service.result == 'success'
       )
     steps:
       - uses: actions/checkout@v4
+
       - name: Copy docker-compose to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "docker-compose.yml"
-          target: "~/classroom/"
-      - name: Deploy to EC2
+          source: docker-compose.yml
+          target: ~/classroom/
+
+      - name: Pull images and restart services
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -249,15 +500,68 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           command_timeout: 20m
           script: |
-            cd classroom
-            sed -i 's|build: ./auth-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-auth-service:latest|g' docker-compose.yml
-            sed -i 's|build: ./academic-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-academic-service:latest|g' docker-compose.yml
-            sed -i 's|build: ./gateway-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-gateway-service:latest|g' docker-compose.yml
-            sed -i 's|build: ./voice-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-voice-service:latest|g' docker-compose.yml
-            sed -i 's|build: ./analytics-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-analytics-service:latest|g' docker-compose.yml
-            sed -i 's|build: ./notifications-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-notifications-service:latest|g' docker-compose.yml
-            sed -i 's|build: ./collaboration-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-collaboration-service:latest|g' docker-compose.yml
+            set -e
+            cd ~/classroom
+
+            # Swap build: directives for pre-built Docker Hub images
+            sed -i "s|build: ./auth-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-auth-service:latest|g"                 docker-compose.yml
+            sed -i "s|build: ./academic-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-academic-service:latest|g"         docker-compose.yml
+            sed -i "s|build: ./gateway-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-gateway-service:latest|g"           docker-compose.yml
+            sed -i "s|build: ./voice-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-voice-service:latest|g"               docker-compose.yml
+            sed -i "s|build: ./analytics-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-analytics-service:latest|g"       docker-compose.yml
+            sed -i "s|build: ./notifications-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-notifications-service:latest|g" docker-compose.yml
+            sed -i "s|build: ./collaboration-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-collaboration-service:latest|g" docker-compose.yml
+
             docker compose pull
-            docker compose up -d --force-recreate
-            sleep 10
+            docker compose up -d --force-recreate --remove-orphans
+
+      - name: Run auth-service DB migrations
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 5m
+          script: |
+            # Wait for auth-service to be healthy before migrating
+            for i in $(seq 1 15); do
+              if docker exec auth-service node -e "process.exit(0)" 2>/dev/null; then break; fi
+              echo "Waiting for auth-service... ($i/15)"
+              sleep 4
+            done
             docker exec auth-service npx drizzle-kit migrate
+
+      - name: Health check
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 3m
+          script: |
+            # Give containers a moment to stabilise
+            sleep 10
+
+            check() {
+              local name=$1 url=$2
+              if curl -sf --max-time 5 "$url" > /dev/null; then
+                echo "  $name — OK"
+              else
+                echo "  $name — UNHEALTHY ($url)"
+                FAILED=1
+              fi
+            }
+
+            FAILED=0
+            check "auth-service"          "http://localhost:8000/"
+            check "academic-service"      "http://localhost:8001/actuator/health"
+            check "gateway-service"       "http://localhost:8080/actuator/health"
+            check "analytics-service"     "http://localhost:8081/api/analytics/health"
+            check "notifications-service" "http://localhost:8082/actuator/health"
+            check "collaboration-service" "http://localhost:8083/actuator/health"
+
+            if [ "$FAILED" = "1" ]; then
+              echo "One or more services failed the health check"
+              exit 1
+            fi
+            echo "All services healthy"

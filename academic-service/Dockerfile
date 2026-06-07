@@ -1,8 +1,10 @@
-FROM eclipse-temurin:21-jdk-alpine AS build
+FROM maven:3.9-eclipse-temurin-21-alpine AS build
 WORKDIR /app
+# Cache dependencies as a separate layer — only re-downloaded when pom.xml changes
 COPY pom.xml .
+RUN mvn dependency:go-offline -q
 COPY src ./src
-RUN apk add --no-cache maven && mvn clean package -DskipTests
+RUN mvn clean package -DskipTests -q
 
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
