@@ -47,4 +47,4 @@ reniew.mov
 *.sw?
 
 # Local dev
-*.local
+*.localvoice-service/.claude
