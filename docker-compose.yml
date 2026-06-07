@@ -35,28 +35,28 @@ services:
       - "8080:8080"
     environment:
       SERVER_PORT: 8080
-      EXPRESS_SERVICE_URL: http://backend:8000
-      VOICE_SERVICE_URL: http://voice-service:3001
+      AUTH_SERVICE_URL: http://auth-service:8000
       ACADEMIC_SERVICE_URL: http://academic-service:8001
-      NOTIFICATION_SERVICE_URL: http://notification-service:8082
+      VOICE_SERVICE_URL: http://voice-service:3001
+      NOTIFICATION_SERVICE_URL: http://notifications-service:8082
       COLLABORATION_SERVICE_URL: http://collaboration-service:8083
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      JWK_SET_URI: http://backend:8000/api/auth/jwks
+      JWK_SET_URI: http://auth-service:8000/api/auth/jwks
     depends_on:
       - redis
       - kafka
-      - backend
+      - auth-service
     networks:
       - classroom-network
 
-  backend:
-    build: ./classroom-backend
-    container_name: backend
+  auth-service:
+    build: ./auth-service
+    container_name: auth-service
     ports:
       - "8000:8000"
     env_file:
-      - ./classroom-backend/.env
+      - ./auth-service/.env
     environment:
       KAFKA_BROKER: kafka:9092
     depends_on:
@@ -70,17 +70,15 @@ services:
     container_name: academic-service
     ports:
       - "8001:8001"
+    env_file:
+      - ./academic-service/.env
     environment:
-      SERVER_PORT: 8001
       KAFKA_BROKER: kafka:9092
-      ACADEMIC_DATABASE_URL: ${ACADEMIC_DATABASE_URL}
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
-      FRONTEND_URL: ${FRONTEND_URL}
-      AUTH_SERVICE_URL: http://backend:8000
+      AUTH_SERVICE_URL: http://auth-service:8000
     depends_on:
       - kafka
       - redis
+      - auth-service
     networks:
       - classroom-network
 

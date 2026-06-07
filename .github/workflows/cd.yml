@@ -25,10 +25,11 @@ jobs:
     needs: guard
     runs-on: ubuntu-latest
     outputs:
-      backend: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.backend }}
-      gateway: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.gateway }}
-      voice: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.voice }}
-      analytics: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.analytics }}
+      auth:         ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.auth }}
+      academic:     ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.academic }}
+      gateway:      ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.gateway }}
+      voice:        ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.voice }}
+      analytics:    ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.analytics }}
       notifications: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.notifications }}
       collaboration: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.collaboration }}
     steps:
@@ -39,8 +40,10 @@ jobs:
         id: changes
         with:
           filters: |
-            backend:
-              - 'classroom-backend/**'
+            auth:
+              - 'auth-service/**'
+            academic:
+              - 'academic-service/**'
             gateway:
               - 'gateway-service/**'
             voice:
@@ -52,9 +55,9 @@ jobs:
             collaboration:
               - 'collaboration-service/**'
 
-  build-and-push-backend:
+  build-and-push-auth-service:
     needs: detect-changes
-    if: needs.detect-changes.outputs.backend == 'true'
+    if: needs.detect-changes.outputs.auth == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -65,10 +68,34 @@ jobs:
           password: ${{ secrets.DOCKER_TOKEN }}
       - uses: docker/build-push-action@v5
         with:
-          context: ./classroom-backend
+          context: ./auth-service
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ${{ secrets.DOCKER_USERNAME }}/classroom-backend:latest
+          tags: ${{ secrets.DOCKER_USERNAME }}/classroom-auth-service:latest
+
+  build-and-push-academic-service:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.academic == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+      - run: cd academic-service && mvn clean package -DskipTests
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+      - uses: docker/build-push-action@v5
+        with:
+          context: ./academic-service
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ secrets.DOCKER_USERNAME }}/classroom-academic-service:latest
 
   build-and-push-gateway:
     needs: detect-changes
@@ -187,7 +214,8 @@ jobs:
   deploy-to-ec2:
     runs-on: ubuntu-latest
     needs:
-      - build-and-push-backend
+      - build-and-push-auth-service
+      - build-and-push-academic-service
       - build-and-push-gateway
       - build-and-push-voice-service
       - build-and-push-analytics-service
@@ -195,7 +223,8 @@ jobs:
       - build-and-push-collaboration-service
     if: |
       always() && (
-        needs.build-and-push-backend.result == 'success' ||
+        needs.build-and-push-auth-service.result == 'success' ||
+        needs.build-and-push-academic-service.result == 'success' ||
         needs.build-and-push-gateway.result == 'success' ||
         needs.build-and-push-voice-service.result == 'success' ||
         needs.build-and-push-analytics-service.result == 'success' ||
@@ -221,7 +250,8 @@ jobs:
           command_timeout: 20m
           script: |
             cd classroom
-            sed -i 's|build: ./classroom-backend|image: ${{ secrets.DOCKER_USERNAME }}/classroom-backend:latest|g' docker-compose.yml
+            sed -i 's|build: ./auth-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-auth-service:latest|g' docker-compose.yml
+            sed -i 's|build: ./academic-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-academic-service:latest|g' docker-compose.yml
             sed -i 's|build: ./gateway-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-gateway-service:latest|g' docker-compose.yml
             sed -i 's|build: ./voice-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-voice-service:latest|g' docker-compose.yml
             sed -i 's|build: ./analytics-service|image: ${{ secrets.DOCKER_USERNAME }}/classroom-analytics-service:latest|g' docker-compose.yml
@@ -230,3 +260,4 @@ jobs:
             docker compose pull
             docker compose up -d --force-recreate
             sleep 10
+            docker exec auth-service npx drizzle-kit migrate
