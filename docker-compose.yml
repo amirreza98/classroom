@@ -51,12 +51,12 @@ services:
       - classroom-network
 
   auth-service:
-    build: ./classroom-backend
+    build: ./auth-service
     container_name: auth-service
     ports:
       - "8000:8000"
     env_file:
-      - ./classroom-backend/.env
+      - ./auth-service/.env
     environment:
       KAFKA_BROKER: kafka:9092
     depends_on:
