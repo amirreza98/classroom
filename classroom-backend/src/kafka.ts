@@ -1,7 +1,7 @@
 import { Kafka } from 'kafkajs';
 
 const kafka = new Kafka({
-  clientId: 'classroom-backend',
+  clientId: 'auth-service',
   brokers: [process.env.KAFKA_BROKER || 'localhost:9092'],
 });
 

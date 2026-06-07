@@ -569,3 +569,41 @@ cd classroom-frontend      && npm install && npm run dev
 **WebSocket connections bypass the gateway.** Browser WebSocket APIs cannot set custom `Authorization` headers on the upgrade handshake. Voice (Socket.IO) and Collaboration (STOMP/SockJS) connect directly via nginx. The gateway's role for those connections is limited to what nginx can forward in the HTTP upgrade request headers.
 
 **Selective CI builds.** GitHub Actions uses `paths-filter` to detect which service directories changed. Only changed services are rebuilt and pushed, keeping CI fast for single-service commits. The deploy step always runs if any build succeeded and applies a rolling `force-recreate`.
+
+
+neondb (source of truth — relations, access control)
+├── Auth
+│   ├── user
+│   ├── account
+│   ├── session
+│   ├── jwks
+│   └── verification
+│
+├── Academic
+│   ├── departments
+│   ├── subjects
+│   └── classes
+│
+├── Engagement
+│   ├── enrollments
+│   └── payments
+│
+└── Management
+    ├── grades (add)
+    └── notifications (add)
+
+MongoDB (content — high volume, flexible)
+├── collaborative_files
+├── subject_chat_messages
+├── books
+├── pdf_segments
+└── voice_sessions
+
+Redis
+├── rate limiting (gateway — already working)
+└── online presence (who is active)
+
+S3
+├── uploaded images (Cloudinary handles this currently)
+├── voice audio files
+└── PDF files

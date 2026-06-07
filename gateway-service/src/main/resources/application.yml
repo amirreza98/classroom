@@ -9,13 +9,10 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          # Better Auth exposes its public keys at /api/auth/jwks (ES256)
-          # Set JWK_SET_URI=http://backend:8000/api/auth/jwks in docker-compose
           jwk-set-uri: ${JWK_SET_URI:http://localhost:8000/api/auth/jwks}
 
   cloud:
     gateway:
-      # Routes are matched top-to-bottom; specific paths must come before the /api/** catch-all
       routes:
         - id: auth-service
           uri: ${EXPRESS_SERVICE_URL:http://localhost:8000}
@@ -32,11 +29,6 @@ spring:
           predicates:
             - Path=/api/books/**
 
-        - id: analytics-service
-          uri: ${ANALYTICS_SERVICE_URL:http://localhost:8081}
-          predicates:
-            - Path=/api/analytics/**
-
         - id: notification-service
           uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8082}
           predicates:
@@ -49,7 +41,17 @@ spring:
           filters:
             - RewritePath=/ws/(?<rest>.*), /${rest}
 
-        # Catch-all for the Express CRUD backend — must be last
+        - id: academic-service
+          uri: ${ACADEMIC_SERVICE_URL:http://localhost:8001}
+          predicates:
+            - Path=/api/departments/**,/api/subjects/**,/api/classes/**,/api/enrollments/**,/api/payments/**,/api/grades/**,/api/student-dashboard/**,/api/stripe/**
+
+        - id: users-service
+          uri: ${EXPRESS_SERVICE_URL:http://localhost:8000}
+          predicates:
+            - Path=/api/users/**
+
+        # Catch-all for Express auth backend
         - id: crud-service
           uri: ${EXPRESS_SERVICE_URL:http://localhost:8000}
           predicates:

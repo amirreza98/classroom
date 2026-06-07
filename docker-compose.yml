@@ -37,7 +37,7 @@ services:
       SERVER_PORT: 8080
       EXPRESS_SERVICE_URL: http://backend:8000
       VOICE_SERVICE_URL: http://voice-service:3001
-      ANALYTICS_SERVICE_URL: http://analytics-service:8081
+      ACADEMIC_SERVICE_URL: http://academic-service:8001
       NOTIFICATION_SERVICE_URL: http://notification-service:8082
       COLLABORATION_SERVICE_URL: http://collaboration-service:8083
       REDIS_HOST: redis
@@ -59,25 +59,28 @@ services:
       - ./classroom-backend/.env
     environment:
       KAFKA_BROKER: kafka:9092
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
     depends_on:
       - kafka
       - redis
     networks:
       - classroom-network
 
-  analytics-service:
-    build: ./analytics-service
-    container_name: analytics-service
+  academic-service:
+    build: ./academic-service
+    container_name: academic-service
     ports:
-      - "8081:8081"
+      - "8001:8001"
     environment:
-      SERVER_PORT: 8081
+      SERVER_PORT: 8001
       KAFKA_BROKER: kafka:9092
-      DATABASE_URL: ${ANALYTICS_DATABASE_URL}
+      ACADEMIC_DATABASE_URL: ${ACADEMIC_DATABASE_URL}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      FRONTEND_URL: ${FRONTEND_URL}
+      AUTH_SERVICE_URL: http://backend:8000
     depends_on:
       - kafka
+      - redis
     networks:
       - classroom-network
 

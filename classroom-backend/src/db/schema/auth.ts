@@ -2,21 +2,22 @@ import { relations } from 'drizzle-orm';
 import {
   boolean,
   index,
-  pgEnum,
-  pgTable,
+  pgSchema,
   text,
   timestamp,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
-export const roleEnum = pgEnum('role', ['student', 'teacher', 'admin']);
+export const authSchema = pgSchema('auth');
+
+export const roleEnum = authSchema.enum('role', ['student', 'teacher', 'admin']);
 
 const timestamps = {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()).notNull(),
 };
 
-export const user = pgTable('user', {
+export const user = authSchema.table('user', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   email: text('email').notNull().unique(),
@@ -27,7 +28,7 @@ export const user = pgTable('user', {
   ...timestamps,
 });
 
-export const session = pgTable(
+export const session = authSchema.table(
   'session',
   {
     id: text('id').primaryKey(),
@@ -46,7 +47,7 @@ export const session = pgTable(
   ]
 );
 
-export const account = pgTable(
+export const account = authSchema.table(
   'account',
   {
     id: text('id').primaryKey(),
@@ -69,7 +70,7 @@ export const account = pgTable(
   ]
 );
 
-export const verification = pgTable(
+export const verification = authSchema.table(
   'verification',
   {
     id: text('id').primaryKey(),
@@ -84,7 +85,7 @@ export const verification = pgTable(
   ]
 );
 
-export const jwks = pgTable('jwks', {
+export const jwks = authSchema.table('jwks', {
   id: text('id').primaryKey(),
   publicKey: text('public_key').notNull(),
   privateKey: text('private_key').notNull(),

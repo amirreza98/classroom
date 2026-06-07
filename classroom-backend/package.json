@@ -1,5 +1,5 @@
 {
-  "name": "classroom-backend",
+  "name": "auth-service",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -29,7 +29,6 @@
     "express": "^5.2.1",
     "kafkajs": "^2.2.4",
     "save": "^2.9.0",
-    "stripe": "^22.2.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
