@@ -74,7 +74,7 @@ services:
       SERVER_PORT: 8001
       KAFKA_BROKER: kafka:9092
       AUTH_SERVICE_URL: http://auth-service:8000
-      ACADEMIC_DATABASE_URL: ${ACADEMIC_DATABASE_URL}
+      DATABASE_URL: ${ACADEMIC_DATABASE_URL}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
       FRONTEND_URL: ${FRONTEND_URL}
@@ -84,7 +84,7 @@ services:
       - auth-service
     networks:
       - classroom-network
-
+      
   notifications-service:
     build: ./notifications-service
     container_name: notifications-service
