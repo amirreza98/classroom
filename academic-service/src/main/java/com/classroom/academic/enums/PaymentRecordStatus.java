@@ -21,7 +21,7 @@ public enum PaymentRecordStatus {
     }
 
     @Converter(autoApply = true)
-    public static class Converter implements AttributeConverter<PaymentRecordStatus, String> {
+    public static class StatusConverter implements AttributeConverter<PaymentRecordStatus, String> {
         @Override public String convertToDatabaseColumn(PaymentRecordStatus s) { return s == null ? null : s.getValue(); }
         @Override public PaymentRecordStatus convertToEntityAttribute(String v) { return v == null ? null : fromValue(v); }
     }
