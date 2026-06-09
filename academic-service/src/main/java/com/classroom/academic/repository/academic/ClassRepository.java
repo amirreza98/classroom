@@ -11,10 +11,10 @@ public interface ClassRepository extends JpaRepository<ClassEntity, Integer> {
 
     @Query("""
         SELECT c FROM ClassEntity c JOIN FETCH c.subject s
-        WHERE (:search IS NULL OR LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%'))
-                               OR LOWER(c.inviteCode) LIKE LOWER(CONCAT('%', :search, '%')))
-          AND (:subject IS NULL OR LOWER(s.name) LIKE LOWER(CONCAT('%', :subject, '%')))
-          AND (:teacher IS NULL OR LOWER(c.teacherId) LIKE LOWER(CONCAT('%', :teacher, '%')))
+        WHERE (:search IS NULL OR LOWER(c.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+                            OR LOWER(c.inviteCode) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
+        AND (:subject IS NULL OR LOWER(s.name) LIKE LOWER(CONCAT('%', CAST(:subject AS string), '%')))
+        AND (:teacher IS NULL OR LOWER(c.teacherId) LIKE LOWER(CONCAT('%', CAST(:teacher AS string), '%')))
         """)
     Page<ClassEntity> findWithFilters(@Param("search") String search,
                                       @Param("subject") String subject,
