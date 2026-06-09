@@ -44,7 +44,7 @@ spring:
         - id: academic-service
           uri: ${ACADEMIC_SERVICE_URL:http://localhost:8001}
           predicates:
-            - Path=/api/departments/**,/api/subjects/**,/api/classes/**,/api/enrollments/**,/api/payments/**,/api/grades/**,/api/student-dashboard/**,/api/stripe/**
+            - Path=/api/departments/**,/api/subjects/**,/api/classes/**,/api/enrollments/**,/api/payments/**,/api/grades/**,/api/student-dashboard/**,/api/stripe/**,/api/dashboard/**
 
         - id: users-service
           uri: ${EXPRESS_SERVICE_URL:http://localhost:8000}

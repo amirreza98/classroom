@@ -70,7 +70,7 @@ services:
     container_name: academic-service
     ports:
       - "8001:8001"
-    environment:
+   ƒ environment:
       SERVER_PORT: 8001
       KAFKA_BROKER: kafka:9092
       AUTH_SERVICE_URL: http://auth-service:8000
@@ -84,7 +84,7 @@ services:
       - auth-service
     networks:
       - classroom-network
-      
+
   notifications-service:
     build: ./notifications-service
     container_name: notifications-service
