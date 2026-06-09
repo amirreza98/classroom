@@ -524,7 +524,7 @@ jobs:
           command_timeout: 3m
           script: |
             # Give containers a moment to stabilise
-            sleep 10
+            sleep 20
 
             check() {
               local name=$1 url=$2

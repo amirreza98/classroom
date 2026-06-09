@@ -23,7 +23,7 @@ public class GatewayAuthFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
         String userId = request.getHeader("x-user-id");
-        String userRole = request.getHeader("x-role"); 
+        String userRole = request.getHeader("x-user-role");
         String userEmail = request.getHeader("x-user-email");
 
         if (userId != null && userRole != null) {
@@ -36,4 +36,3 @@ public class GatewayAuthFilter extends OncePerRequestFilter {
         chain.doFilter(request, response);
     }
 }
-
