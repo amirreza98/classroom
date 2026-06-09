@@ -36,3 +36,4 @@ public class GatewayAuthFilter extends OncePerRequestFilter {
         chain.doFilter(request, response);
     }
 }
+
