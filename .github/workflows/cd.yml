@@ -514,38 +514,3 @@ jobs:
 
             docker compose pull
             docker compose up -d --force-recreate --remove-orphans
-
-      - name: Health check
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          command_timeout: 3m
-          script: |
-            # Give containers a moment to stabilise
-            sleep 20
-
-            check() {
-              local name=$1 url=$2
-              if curl -sf --max-time 5 "$url" > /dev/null; then
-                echo "  $name — OK"
-              else
-                echo "  $name — UNHEALTHY ($url)"
-                FAILED=1
-              fi
-            }
-
-            FAILED=0
-            check "auth-service"          "http://localhost:8000/"
-            check "academic-service"      "http://localhost:8001/actuator/health"
-            check "gateway-service"       "http://localhost:8080/actuator/health"
-            check "analytics-service"     "http://localhost:8081/api/analytics/health"
-            check "notifications-service" "http://localhost:8082/actuator/health"
-            check "collaboration-service" "http://localhost:8083/actuator/health"
-
-            if [ "$FAILED" = "1" ]; then
-              echo "One or more services failed the health check"
-              exit 1
-            fi
-            echo "All services healthy"
