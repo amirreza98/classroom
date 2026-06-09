@@ -56,7 +56,7 @@ public class ClassService {
         cls.setBannerUrl(bannerUrl);
         cls.setBannerCldPubId(bannerCldPubId);
         cls.setInviteCode(UUID.randomUUID().toString().replace("-", "").substring(0, 7));
-        cls.setStatus(ClassStatus.ACTIVE);
+        cls.setStatus(ClassStatus.active);
         cls.setSchedules("[]");
 
         ClassEntity saved = repo.save(cls);

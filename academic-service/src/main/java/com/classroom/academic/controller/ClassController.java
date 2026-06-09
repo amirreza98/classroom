@@ -81,7 +81,7 @@ public class ClassController {
             Integer subjectId = body.get("subjectId") != null ? ((Number) body.get("subjectId")).intValue() : null;
             Integer capacity = body.get("capacity") != null ? ((Number) body.get("capacity")).intValue() : null;
             ClassStatus status = body.get("status") != null
-                    ? ClassStatus.valueOf(body.get("status").toString().toUpperCase()) : null;
+                    ? ClassStatus.valueOf(body.get("status").toString().toLowerCase()) : null;
 
             ClassEntity updated = service.update(id, (String) body.get("name"), (String) body.get("description"),
                     subjectId, (String) body.get("teacherId"), capacity, status,

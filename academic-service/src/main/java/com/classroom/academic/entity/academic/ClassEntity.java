@@ -46,7 +46,7 @@ public class ClassEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, columnDefinition = "TEXT")
-    private ClassStatus status = ClassStatus.ACTIVE;
+    private ClassStatus status = ClassStatus.active;
 
     // JSONB stored as text; parse in service layer
     @Column(columnDefinition = "jsonb")
