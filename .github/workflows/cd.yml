@@ -515,22 +515,6 @@ jobs:
             docker compose pull
             docker compose up -d --force-recreate --remove-orphans
 
-      - name: Run auth-service DB migrations
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          command_timeout: 5m
-          script: |
-            # Wait for auth-service to be healthy before migrating
-            for i in $(seq 1 15); do
-              if docker exec auth-service node -e "process.exit(0)" 2>/dev/null; then break; fi
-              echo "Waiting for auth-service... ($i/15)"
-              sleep 4
-            done
-            docker exec auth-service npx drizzle-kit migrate
-
       - name: Health check
         uses: appleboy/ssh-action@v1.0.0
         with:
