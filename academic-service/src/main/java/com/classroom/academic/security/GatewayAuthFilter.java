@@ -26,6 +26,8 @@ public class GatewayAuthFilter extends OncePerRequestFilter {
         String userRole = request.getHeader("x-user-role");
         String userEmail = request.getHeader("x-user-email");
 
+        System.out.println(">>> Academic filter - userId: " + userId + " userRole: " + userRole);
+
         if (userId != null && userRole != null) {
             UserPrincipal principal = new UserPrincipal(userId, userEmail != null ? userEmail : "", userRole);
             UsernamePasswordAuthenticationToken auth =
