@@ -3,18 +3,19 @@ package com.classroom.collaboration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessageType;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org.springframework.stereotype.Controller;
-import org.springframework.web.socket.messaging.SessionSubscribeEvent;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.http.ResponseEntity;
-import java.util.List;
+import org.springframework.web.socket.messaging.SessionSubscribeEvent;
 
+import java.util.List;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -29,6 +30,27 @@ public class CollaborationController {
 
     private final SimpMessagingTemplate messagingTemplate;
     private final CollaborativeFileRepository fileRepository;
+
+    @GetMapping("/classes/{classId}/files")
+    public ResponseEntity<List<CollaborativeFile>> getFilesByClass(
+            @PathVariable String classId) {
+        return ResponseEntity.ok(fileRepository.findByClassId(classId));
+    }
+
+    @PostMapping("/classes/{classId}/files")
+    public ResponseEntity<CollaborativeFile> createFile(
+            @PathVariable String classId,
+            @RequestBody CreateFileRequest request) {
+
+        CollaborativeFile file = fileRepository.save(CollaborativeFile.builder()
+                .classId(classId)
+                .fileId(UUID.randomUUID().toString())
+                .name(request.getName())
+                .createdBy(request.getCreatedBy())
+                .build());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(file);
+    }
 
     @MessageMapping("/collaboration/{classId}/{fileId}/sync")
     public void handleSync(
@@ -55,12 +77,6 @@ public class CollaborationController {
                 "/topic/collaboration/" + classId + "/" + fileId,
                 update
         );
-    }
-
-    @GetMapping("/classes/{classId}/files")
-    public ResponseEntity<List<CollaborativeFile>> getFilesByClass(
-            @PathVariable String classId) {
-        return ResponseEntity.ok(fileRepository.findByClassId(classId));
     }
 
     @EventListener

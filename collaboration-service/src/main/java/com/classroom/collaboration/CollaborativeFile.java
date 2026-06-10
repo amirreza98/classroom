@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
@@ -31,8 +32,18 @@ public class CollaborativeFile {
     @Column(name = "file_id", nullable = false)
     private String fileId;
 
+    @Column(name = "name")
+    private String name;
+
+    @Column(name = "created_by")
+    private String createdBy;
+
     @Column(name = "yjs_state", columnDefinition = "bytea")
     private byte[] yjsState;
+
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private Instant createdAt;
 
     @UpdateTimestamp
     @Column(name = "updated_at")
