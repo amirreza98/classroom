@@ -11,11 +11,15 @@ import org.springframework.messaging.simp.SimpMessageType;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.socket.messaging.SessionSubscribeEvent;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.http.ResponseEntity;
+import java.util.List;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-@Controller
+@RestController
+@RequestMapping("/collaboration")
 @Slf4j
 @RequiredArgsConstructor
 public class CollaborationController {
@@ -51,6 +55,12 @@ public class CollaborationController {
                 "/topic/collaboration/" + classId + "/" + fileId,
                 update
         );
+    }
+
+    @GetMapping("/classes/{classId}/files")
+    public ResponseEntity<List<CollaborativeFile>> getFilesByClass(
+            @PathVariable String classId) {
+        return ResponseEntity.ok(fileRepository.findByClassId(classId));
     }
 
     @EventListener
