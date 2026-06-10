@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Optional;
+
 public interface ClassRepository extends JpaRepository<ClassEntity, Integer> {
 
     @Query("""
@@ -20,4 +22,7 @@ public interface ClassRepository extends JpaRepository<ClassEntity, Integer> {
                                       @Param("subject") String subject,
                                       @Param("teacher") String teacher,
                                       Pageable pageable);
+
+    @Query("SELECT c FROM ClassEntity c JOIN FETCH c.subject WHERE c.id = :id")
+    Optional<ClassEntity> findByIdWithSubject(@Param("id") Integer id);
 }

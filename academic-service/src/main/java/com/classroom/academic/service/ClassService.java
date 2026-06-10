@@ -38,7 +38,8 @@ public class ClassService {
     }
 
     public ClassEntity getById(Integer id) {
-        return repo.findById(id).orElseThrow(() -> new EntityNotFoundException("Class not found"));
+        return repo.findByIdWithSubject(id)
+                .orElseThrow(() -> new EntityNotFoundException("Class not found"));
     }
 
     @Transactional
