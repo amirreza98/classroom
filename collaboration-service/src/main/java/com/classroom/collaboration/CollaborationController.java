@@ -55,12 +55,17 @@ public class CollaborationController {
     }
 
     @GetMapping("/files/{fileId}/state")
-    public ResponseEntity<byte[]> getFileState(@PathVariable Long fileId) {
+    public ResponseEntity<Map<String, Object>> getFileState(@PathVariable Long fileId) {
         return fileRepository.findById(fileId)
-                .filter(f -> f.getYjsState() != null && f.getYjsState().length > 0)
-                .map(f -> ResponseEntity.ok()
-                        .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                        .body(f.getYjsState()))
+                .map(f -> {
+                    if (f.getYjsState() == null || f.getYjsState().length == 0) {
+                        return ResponseEntity.noContent().<Map<String, Object>>build();
+                    }
+                    byte[] state = f.getYjsState();
+                    List<Integer> stateList = new java.util.ArrayList<>();
+                    for (byte b : state) stateList.add((int) b & 0xFF);
+                    return ResponseEntity.ok(Map.<String, Object>of("state", stateList));
+                })
                 .orElse(ResponseEntity.notFound().build());
     }
 
@@ -89,6 +94,24 @@ public class CollaborationController {
                 "/topic/collaboration/" + classId + "/" + fileId,
                 update
         );
+    }
+
+    @PutMapping("/files/{fileId}/state")
+    public ResponseEntity<Void> saveFileState(
+            @PathVariable Long fileId,
+            @RequestBody Map<String, Object> body) {
+
+        return fileRepository.findById(fileId).map(file -> {
+            @SuppressWarnings("unchecked")
+            List<Integer> stateList = (List<Integer>) body.get("state");
+            byte[] state = new byte[stateList.size()];
+            for (int i = 0; i < stateList.size(); i++) {
+                state[i] = stateList.get(i).byteValue();
+            }
+            file.setYjsState(state);
+            fileRepository.save(file);
+            return ResponseEntity.ok().<Void>build();
+        }).orElse(ResponseEntity.notFound().build());
     }
 
     @EventListener
