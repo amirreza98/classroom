@@ -9,9 +9,19 @@ import usersRouter from './routes/users.js';
 import securityMiddleware from './middleware/security.js';
 import { auth } from './lib/auth.js';
 import "./kafka.js";
+import { Registry, collectDefaultMetrics } from 'prom-client';
+
 
 const app = express();
 const PORT = 8000;
+
+const register = new Registry();
+collectDefaultMetrics({ register });
+
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', register.contentType);
+  res.send(await register.metrics());
+});
 
 const FRONTEND_URL = process.env.FRONTEND_URL;
 if (!FRONTEND_URL) {
@@ -26,10 +36,6 @@ app.use(cors({
     credentials: true
 }));
 
-// Spring Cloud Gateway appends its own hop to X-Forwarded-Proto, producing
-// "https,http" or "http,http". better-call uses the raw header value as the
-// URL scheme, which makes new Request() throw on the comma. Take only the
-// first (outermost / client-facing) value before better-auth reads it.
 app.use((req, _res, next) => {
     const proto = req.headers['x-forwarded-proto'];
     if (typeof proto === 'string' && proto.includes(',')) {

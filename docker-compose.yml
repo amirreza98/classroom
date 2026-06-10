@@ -2,6 +2,7 @@ services:
   redis:
     image: redis:alpine
     container_name: redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
     networks:
@@ -10,6 +11,7 @@ services:
   kafka:
     image: apache/kafka:latest
     container_name: kafka
+    restart: unless-stopped
     ports:
       - "9092:9092"
     environment:
@@ -31,6 +33,7 @@ services:
   gateway-service:
     build: ./gateway-service
     container_name: gateway-service
+    restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
@@ -53,6 +56,7 @@ services:
   auth-service:
     build: ./auth-service
     container_name: auth-service
+    restart: unless-stopped
     ports:
       - "8000:8000"
     env_file:
@@ -68,6 +72,7 @@ services:
   academic-service:
     build: ./academic-service
     container_name: academic-service
+    restart: unless-stopped
     ports:
       - "8001:8001"
     environment:
@@ -88,11 +93,13 @@ services:
   notifications-service:
     build: ./notifications-service
     container_name: notifications-service
+    restart: unless-stopped
     ports:
       - "8082:8082"
     environment:
       SERVER_PORT: 8082
       KAFKA_BROKER: kafka:9092
+      DATABASE_URL: ${NOTIFICATIONS_DATABASE_URL}
     depends_on:
       - kafka
     networks:
@@ -101,6 +108,7 @@ services:
   voice-service:
     build: ./voice-service
     container_name: voice-service
+    restart: unless-stopped
     ports:
       - "3001:3001"
     env_file:
@@ -115,6 +123,7 @@ services:
   collaboration-service:
     build: ./collaboration-service
     container_name: collaboration-service
+    restart: unless-stopped
     ports:
       - "8083:8083"
     environment:
@@ -127,6 +136,45 @@ services:
     networks:
       - classroom-network
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    networks:
+      - classroom-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-classroom123}
+      GF_USERS_ALLOW_SIGN_UP: false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    networks:
+      - classroom-network
+
 networks:
   classroom-network:
     driver: bridge
+
+volumes:
+  prometheus_data:
+  grafana_data:

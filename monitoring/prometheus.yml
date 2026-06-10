@@ -1,0 +1,34 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'gateway-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['gateway-service:8080']
+
+  - job_name: 'academic-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['academic-service:8001']
+
+  - job_name: 'notifications-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['notifications-service:8082']
+
+  - job_name: 'collaboration-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['collaboration-service:8083']
+
+  - job_name: 'auth-service'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['auth-service:8000']
+
+  - job_name: 'voice-service'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['voice-service:3001']
