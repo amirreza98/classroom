@@ -1,7 +1,6 @@
 package com.classroom.gateway_service;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -32,18 +31,20 @@ import java.nio.charset.StandardCharsets;
 @EnableWebFluxSecurity
 public class SecurityConfig {
 
-    // Auth routes bypass JWT validation entirely — login/callback/logout never carry a token
     @Bean
     @Order(1)
     public SecurityWebFilterChain authRouteChain(ServerHttpSecurity http) {
         return http
-                .securityMatcher(ServerWebExchangeMatchers.pathMatchers("/api/auth/**", "/api/stripe/webhook"))
+                .securityMatcher(ServerWebExchangeMatchers.pathMatchers(
+                    "/api/auth/**",
+                    "/api/stripe/webhook",
+                    "/actuator/**"
+                ))
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .authorizeExchange(ex -> ex.anyExchange().permitAll())
                 .build();
     }
 
-    // All other routes require a valid JWT; missing/invalid token → JSON 401
     @Bean
     @Order(2)
     public SecurityWebFilterChain protectedRouteChain(ServerHttpSecurity http) {
@@ -63,9 +64,6 @@ public class SecurityConfig {
                 .build();
     }
 
-    // NimbusReactiveJwtDecoder fetches the JWK set lazily on the first validated request,
-    // so the gateway starts fine even when the JWKS endpoint is temporarily unavailable.
-    // Better Auth issues ES256 tokens, so we pin that algorithm to reject unexpected algs.
     @Bean
     public ReactiveJwtDecoder jwtDecoder(
             @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}") String jwkSetUri) {
@@ -75,7 +73,6 @@ public class SecurityConfig {
                 .build();
     }
 
-    // Inject user-identity headers so downstream services can trust them without re-validating the JWT
     @Bean
     @Order(-2)
     public GlobalFilter jwtHeadersFilter() {
@@ -91,10 +88,6 @@ public class SecurityConfig {
 
                 System.out.println(">>> Injecting headers - userId: " + userId + " role: " + role);
 
-                // mutate().header().build() wraps the merged headers in ReadOnlyHttpHeaders,
-                // causing UnsupportedOperationException when downstream gateway filters
-                // (hop-by-hop removal, forwarded-header processing) call .put() on them.
-                // A ServerHttpRequestDecorator with an explicit mutable copy avoids this.
                 HttpHeaders mutableHeaders = new HttpHeaders();
                 mutableHeaders.putAll(exchange.getRequest().getHeaders());
                 mutableHeaders.set("X-User-Id",    userId != null ? userId : "");
