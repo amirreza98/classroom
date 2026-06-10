@@ -167,7 +167,7 @@ export default function StudentDashboard() {
                                                 <span>{cls.teacherName}</span>
                                             </div>
                                         )}
-                                        {cls.schedules && cls.schedules.length > 0 && (
+                                        {Array.isArray(cls.schedules) && cls.schedules.length > 0 && (
                                             <div className="flex flex-col gap-1">
                                                 {cls.schedules.map((s, i) => (
                                                     <div key={i} className="flex items-center gap-2">

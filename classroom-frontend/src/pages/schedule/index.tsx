@@ -239,12 +239,12 @@ export default function SchedulePage() {
                                         <span>{cls.teacher.name}</span>
                                     </div>
                                 )}
-                                {cls.schedules && cls.schedules.length > 0 && (
+                                {Array.isArray(cls.schedules) && cls.schedules.length > 0 && (
                                     <div className="flex flex-col gap-1 mt-1">
                                         {cls.schedules.map((s, i) => (
                                             <div key={i} className="flex items-center gap-2">
                                                 <CalendarDays className="h-4 w-4 shrink-0" />
-                                                <span>{s.day} · {s.startTime} – {s.endTime}</span>
+                                                <span>{s.day} · {s.startTime} - {s.endTime}</span>
                                             </div>
                                         ))}
                                     </div>
