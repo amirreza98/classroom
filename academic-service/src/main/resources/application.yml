@@ -51,3 +51,6 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+  metrics:
+      tags:
+        application: ${spring.application.name}

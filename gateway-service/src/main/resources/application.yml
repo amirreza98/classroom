@@ -71,7 +71,6 @@ spring:
           predicates:
             - Path=/api/users/**
 
-        # Catch-all for Express auth backend
         - id: crud-service
           uri: ${EXPRESS_SERVICE_URL:http://localhost:8000}
           predicates:
@@ -87,9 +86,12 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,gateway,metrics, prometheus
+        include: health,info,gateway,metrics,prometheus
   endpoint:
     health:
       show-details: always
     gateway:
       enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
