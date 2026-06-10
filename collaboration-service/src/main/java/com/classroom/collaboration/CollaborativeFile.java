@@ -11,8 +11,9 @@ import java.time.Instant;
 
 @Entity
 @Table(
-        name = "collaborative_files",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"class_id", "file_id"})
+    schema = "engagement",
+    name = "collaborative_files",
+    uniqueConstraints = @UniqueConstraint(columnNames = {"class_id", "file_id"})
 )
 @Data
 @Builder
