@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.socket.messaging.SessionSubscribeEvent;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -38,7 +39,7 @@ public class CollaborationController {
     }
 
     @PostMapping("/classes/{classId}/files")
-    public ResponseEntity<CollaborativeFile> createFile(
+    public ResponseEntity<Map<String, Object>> createFile(
             @PathVariable String classId,
             @RequestBody CreateFileRequest request) {
 
@@ -49,7 +50,7 @@ public class CollaborationController {
                 .createdBy(request.getCreatedBy())
                 .build());
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(file);
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("data", file));
     }
 
     @MessageMapping("/collaboration/{classId}/{fileId}/sync")
