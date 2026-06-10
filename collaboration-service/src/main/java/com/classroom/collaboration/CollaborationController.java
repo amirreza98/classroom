@@ -17,6 +17,7 @@ import org.springframework.web.socket.messaging.SessionSubscribeEvent;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.http.MediaType;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -51,6 +52,16 @@ public class CollaborationController {
                 .build());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("data", file));
+    }
+
+    @GetMapping("/files/{fileId}/state")
+    public ResponseEntity<byte[]> getFileState(@PathVariable Long fileId) {
+        return fileRepository.findById(fileId)
+                .filter(f -> f.getYjsState() != null && f.getYjsState().length > 0)
+                .map(f -> ResponseEntity.ok()
+                        .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                        .body(f.getYjsState()))
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @MessageMapping("/collaboration/{classId}/{fileId}/sync")
