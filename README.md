@@ -21,6 +21,7 @@ A production-grade microservices platform for managing classrooms, enrollments, 
   - [collaboration-service](#collaboration-service--port-8083)
   - [classroom-frontend](#classroom-frontend--port-5173-dev--vercel-prod)
 - [Infrastructure](#infrastructure)
+- [Monitoring](#monitoring)
 - [Deployment](#deployment)
 - [Key Design Decisions](#key-design-decisions)
 
@@ -36,6 +37,7 @@ A production-grade microservices platform for managing classrooms, enrollments, 
 - **AI voice reading assistant** — upload PDF books, start a Socket.IO session, and converse with OpenAI Realtime
 - **Event-driven analytics** — Kafka `student.actions` topic consumed by an isolated analytics service
 - **User notifications** — REST API with role-scoped create/read/delete
+- **Prometheus + Grafana monitoring** — metrics scraped from all 6 services every 15 s; Grafana auto-provisioned with a Prometheus datasource
 - **Selective CI builds** — GitHub Actions only rebuilds services with changed files
 - **Docker Compose + EC2 deployment** — tree-hash image caching prevents redundant Docker Hub pushes
 
@@ -57,6 +59,7 @@ A production-grade microservices platform for managing classrooms, enrollments, 
 | Message Bus | Apache Kafka (KRaft, single-node) |
 | Cache / PubSub | Redis |
 | Storage | AWS S3 (PDFs, book covers), Cloudinary (profile images) |
+| Monitoring | Prometheus, Grafana |
 | CI/CD | GitHub Actions, Docker Hub, EC2 + nginx |
 
 ---
@@ -71,7 +74,7 @@ Browser
   │    ┌────▼────────────────────────────────────────────────────┐
   │    │  gateway-service  :8080  (Spring Cloud Gateway)         │
   │    │  • Validates ES256 JWT against auth-service JWKS        │
-  │    │  • Injects X-User-Id / X-User-Role / X-User-Email      │
+  │    │  • Injects X-User-Id / X-User-Role / X-User-Email       │
   │    │  • Redis fixed-window rate limiting per user            │
   │    └──┬──────────────────────────────────────────────────────┘
   │       │
@@ -102,8 +105,10 @@ Async (Kafka topic: student.actions)
   analytics-service  ──consumes──► all events  (group: analytics-group)
 
 Infrastructure
-  Redis  :6379  — gateway rate-limit counters, collaboration pub/sub
-  Kafka  :9092  — event bus (KRaft mode)
+  Redis       :6379  — gateway rate-limit counters, collaboration pub/sub
+  Kafka       :9092  — event bus (KRaft mode)
+  Prometheus  :9090  — scrapes /actuator/prometheus (Java) and /metrics (Node.js) every 15 s
+  Grafana     :3000  — visualisation; auto-provisioned with Prometheus datasource
 ```
 
 ---
@@ -606,6 +611,42 @@ All services catch Kafka errors at startup and on publish — Kafka is non-fatal
 
 ---
 
+## Monitoring
+
+The stack ships two observability containers — Prometheus and Grafana — that start alongside the application services.
+
+### Prometheus — port 9090
+
+Scrapes metrics from all six instrumented services every 15 seconds.
+
+| Job | Endpoint | Service |
+|---|---|---|
+| `gateway-service` | `gateway-service:8080/actuator/prometheus` | Spring Cloud Gateway |
+| `academic-service` | `academic-service:8001/actuator/prometheus` | Spring Boot |
+| `notifications-service` | `notifications-service:8082/actuator/prometheus` | Spring Boot |
+| `collaboration-service` | `collaboration-service:8083/actuator/prometheus` | Spring Boot |
+| `auth-service` | `auth-service:8000/metrics` | Node.js / prom-client |
+| `voice-service` | `voice-service:3001/metrics` | NestJS / @willsoto/nestjs-prometheus |
+
+Java services expose metrics via **Spring Boot Actuator** (`spring-boot-starter-actuator` + `micrometer-registry-prometheus`). Node.js services use **prom-client** directly (auth-service) or through the `@willsoto/nestjs-prometheus` module (voice-service). All services emit default JVM / Node.js runtime metrics plus HTTP server metrics. Each Spring Boot service tags every metric with `application=<service-name>` for easy filtering in Grafana.
+
+Configuration: [`monitoring/prometheus.yml`](monitoring/prometheus.yml)
+
+### Grafana — port 3000
+
+Auto-provisioned on startup with Prometheus pre-wired as the default datasource.
+
+| Setting | Value |
+|---|---|
+| URL | `http://localhost:3000` |
+| Default credentials | `admin` / `classroom123` (override with `GRAFANA_PASSWORD` env var) |
+| Datasource | Prometheus at `http://prometheus:9090` |
+| Dashboard path | `monitoring/grafana/provisioning/dashboards/` |
+
+Provisioning config: [`monitoring/grafana/provisioning/`](monitoring/grafana/provisioning/)
+
+---
+
 ## Deployment
 
 ### Docker Compose
@@ -631,8 +672,10 @@ docker compose up --build
 | `collaboration-service` | 8083 | redis |
 | `voice-service` | 3001 | kafka |
 | `gateway-service` | 8080 | redis, kafka, auth-service |
+| `prometheus` | 9090 | all services |
+| `grafana` | 3000 | prometheus |
 
-All containers run on the `classroom-network` bridge network.
+All containers run on the `classroom-network` bridge network. Prometheus time-series data is persisted in the `prometheus_data` volume; Grafana state in `grafana_data`.
 
 ### Local Development (without Docker)
 
