@@ -53,7 +53,7 @@ export default function SchedulePage() {
                     setAllClasses((data.data ?? []).filter(c => c.teacherId === session.user.id));
                 } else {
                     const enrollRes = await fetch(
-                        `${BASE_URL}/enrollments?studentId=${session.user.id}`,
+                        `${BASE_URL}enrollments?studentId=${session.user.id}`,
                         { headers: hdrs }
                     );
                     if (!enrollRes.ok) throw new Error("Failed to fetch enrollments");
