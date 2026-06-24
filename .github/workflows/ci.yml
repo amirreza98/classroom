@@ -124,7 +124,7 @@ jobs:
           cache: 'maven'
       - name: Compile & test
         working-directory: academic-service
-        run: mvn clean verify --batch-mode --no-transfer-progress
+        run: ./mvnw clean verify --batch-mode --no-transfer-progress
 
   ci-gateway:
     needs: detect-changes

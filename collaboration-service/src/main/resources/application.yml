@@ -9,8 +9,11 @@ spring:
     url: ${DATABASE_URL}
     driver-class-name: org.postgresql.Driver
     hikari:
-      connection-timeout: 30000
       maximum-pool-size: 5
+      connection-timeout: 30000
+      minimum-idle: 0
+      keepalive-time: 0
+      idle-timeout: 10000
 
   jpa:
     hibernate:
